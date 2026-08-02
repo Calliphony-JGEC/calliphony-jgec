@@ -10,44 +10,68 @@ const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 async function uploadToCloudinary(file, folderName, onProgress) {
   const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  // store specifically in calliphony-events / <Event Name>
   const cleanFolderName = folderName.trim().replace(/\/+/g, '-');
-  formData.append('folder', `calliphony-events/${cleanFolderName}`);
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
+  const createFormData = () => {
+    const formData = new FormData();
+    formData.append('file', file, file.name || 'media_upload');
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('folder', `calliphony-events/${cleanFolderName}`);
+    return formData;
+  };
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(e.loaded / e.total);
-      }
-    };
+  try {
+    return await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const data = JSON.parse(xhr.responseText);
-        resolve({
-          secure_url: data.secure_url,
-          resource_type: data.resource_type, // 'image' or 'video'
-        });
-      } else {
-        try {
-          const err = JSON.parse(xhr.responseText);
-          reject(new Error(err.error?.message || `Upload failed (${xhr.status})`));
-        } catch {
-          reject(new Error(`Upload failed with status ${xhr.status}`));
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(e.loaded / e.total);
         }
-      }
-    };
+      };
 
-    xhr.onerror = () => reject(new Error('Network error during upload.'));
-    xhr.send(formData);
-  });
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const data = JSON.parse(xhr.responseText);
+          resolve({
+            secure_url: data.secure_url,
+            resource_type: data.resource_type,
+          });
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            reject(new Error(err.error?.message || `Upload failed (${xhr.status})`));
+          } catch {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('XHR_NETWORK_ERROR'));
+      xhr.send(createFormData());
+    });
+  } catch (err) {
+    if (err.message === 'XHR_NETWORK_ERROR') {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: createFormData(),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `Upload failed (${response.status})`);
+      }
+      const data = await response.json();
+      if (onProgress) {
+        onProgress(1);
+      }
+      return {
+        secure_url: data.secure_url,
+        resource_type: data.resource_type,
+      };
+    }
+    throw err;
+  }
 }
 
 export default function AdminUpload() {
@@ -159,14 +183,17 @@ export default function AdminUpload() {
     }));
 
     setFiles((prev) => [...prev, ...newFiles]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeFile = (id) => {
     setFiles((prev) => {
       const removed = prev.find((f) => f.id === id);
       if (removed?.preview) URL.revokeObjectURL(removed.preview);
-      return prev.filter((f) => f.id !== id);
+      const remaining = prev.filter((f) => f.id !== id);
+      if (remaining.length === 0 && fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return remaining;
     });
   };
 
@@ -192,6 +219,9 @@ export default function AdminUpload() {
     setEditEventDescription('');
     setExistingMedia([]);
     setError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     setFiles((prev) => {
       prev.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
       return [];
@@ -299,6 +329,9 @@ export default function AdminUpload() {
           });
           setSuccessMessage(`Successfully synchronized changes with Cloudinary and Firestore! Archive updated for "${newName}".`);
           setSelectedEventName(newName);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
           setFiles((prev) => {
             prev.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
             return [];
