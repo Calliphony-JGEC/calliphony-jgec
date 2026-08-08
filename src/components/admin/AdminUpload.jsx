@@ -2,77 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/firebaseConfig';
 import { checkMediaValidity, filterValidEvents } from '../../utils/mediaValidity';
+import { uploadToCloudinary, isCloudinaryConfigured } from '../../utils/cloudinary';
 
-
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-
-
-async function uploadToCloudinary(file, folderName, onProgress) {
-  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
-  const cleanFolderName = folderName.trim().replace(/\/+/g, '-');
-
-  const createFormData = () => {
-    const formData = new FormData();
-    formData.append('file', file, file.name || 'media_upload');
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    formData.append('folder', `calliphony-events/${cleanFolderName}`);
-    return formData;
-  };
-
-  try {
-    return await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', url);
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(e.loaded / e.total);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const data = JSON.parse(xhr.responseText);
-          resolve({
-            secure_url: data.secure_url,
-            resource_type: data.resource_type,
-          });
-        } else {
-          try {
-            const err = JSON.parse(xhr.responseText);
-            reject(new Error(err.error?.message || `Upload failed (${xhr.status})`));
-          } catch {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
-          }
-        }
-      };
-
-      xhr.onerror = () => reject(new Error('XHR_NETWORK_ERROR'));
-      xhr.send(createFormData());
-    });
-  } catch (err) {
-    if (err.message === 'XHR_NETWORK_ERROR') {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: createFormData(),
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `Upload failed (${response.status})`);
-      }
-      const data = await response.json();
-      if (onProgress) {
-        onProgress(1);
-      }
-      return {
-        secure_url: data.secure_url,
-        resource_type: data.resource_type,
-      };
-    }
-    throw err;
-  }
-}
 
 export default function AdminUpload() {
   // new/existing modess
@@ -276,7 +207,7 @@ export default function AdminUpload() {
     setError('');
     setSuccessMessage('');
 
-    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    if (!isCloudinaryConfigured()) {
       setError('Cloudinary is not configured. Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in your .env file.');
       return;
     }
@@ -313,8 +244,8 @@ export default function AdminUpload() {
       if (totalFiles > 0) {
         for (const fileObj of files) {
           const { file } = fileObj;
-          // upload to cloudinary under subfolder calliphony-events/<Event Name>
-          const result = await uploadToCloudinary(file, finalEventName, (fileProgress) => {
+          const cleanFolder = `calliphony-events/${finalEventName.trim().replace(/\/+/g, '-')}`;
+          const result = await uploadToCloudinary(file, cleanFolder, (fileProgress) => {
             const overallProgress = ((completedFiles + fileProgress) / totalFiles) * 100;
             setUploadProgress(Math.round(overallProgress));
           });

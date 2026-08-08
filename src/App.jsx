@@ -11,7 +11,7 @@ import Footer from './components/Footer';
 import EventDetailPage from './components/EventDetailPage';
 import ScrollProgress from './components/ScrollProgress';
 import useScrollReveal from './hooks/useScrollReveal';
-import { initialSecretaries } from './data/secretaryData';
+
 import { filterValidEvents, checkMediaValidity } from './utils/mediaValidity';
 
 // admin pages
@@ -23,8 +23,7 @@ import AdminIntake from './components/admin/AdminIntake';
 import ProtectedRoute from './components/admin/ProtectedRoute';
 
 // landing page
-function LandingPage({ events }) {
-  const [secretaries] = useState(initialSecretaries);
+function LandingPage({ events, secretaries }) {
   const [detailModalMode, setDetailModalMode] = useState(null);
   const location = useLocation();
 
@@ -89,6 +88,7 @@ function LandingPage({ events }) {
 
 export default function App() {
   const [events, setEvents] = useState([]);
+  const [secretaries, setSecretaries] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -184,12 +184,35 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'secretaries'), (snapshot) => {
+      const grouped = {};
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const yr = data.year || 'Unknown';
+        if (!grouped[yr]) grouped[yr] = [];
+        grouped[yr].push({
+          id: docSnap.id,
+          name: data.name || '',
+          role: data.role || 'Secretary',
+          image: data.image || '',
+          icon: data.icon || '🎵',
+        });
+      });
+      setSecretaries(grouped);
+    }, (err) => {
+      console.error('Error fetching secretaries:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <>
       <ScrollProgress />
       <Routes>
         {/* landing page */}
-        <Route path="/" element={<LandingPage events={events} />} />
+        <Route path="/" element={<LandingPage events={events} secretaries={secretaries} />} />
 
         {/* event details page */}
         <Route path="/events/:eventId" element={<EventDetailPage events={events} loading={loading} />} />
