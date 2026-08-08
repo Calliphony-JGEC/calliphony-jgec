@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-export default function Navbar() {
+export default function HomeHomeNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,8 +33,8 @@ export default function Navbar() {
   };
 
   return (
-    <header className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
-      <nav className="navbar-container">
+    <header className={`HomeNavbar ${scrolled ? 'HomeNavbar--scrolled' : ''}`}>
+      <nav className="HomeNavbar-container">
         <a href="/" onClick={(e) => handleNavClick(e, '')} className="nav-logo">
           <span>/ calliphony</span>
           <div className="equalizer" title="live">

@@ -138,6 +138,7 @@ export default function AdminUpload() {
 
   useEffect(() => {
     let isCancelled = false;
+    setDeleteConfirm(false);
     const syncExistingMedia = async () => {
       if (mode === 'existing' && selectedEventName) {
         const found = existingEventsList.find((ev) => ev.name === selectedEventName);
@@ -226,6 +227,48 @@ export default function AdminUpload() {
       prev.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
       return [];
     });
+  };
+
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const handleDeleteEvent = async () => {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      return;
+    }
+
+    const foundEvent = existingEventsList.find((ev) => ev.name === selectedEventName);
+    let targetDocId = foundEvent ? foundEvent.docId : null;
+
+    if (!targetDocId) {
+      const q = query(collection(db, 'events'), where('eventName', '==', selectedEventName));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        targetDocId = snapshot.docs[0].id;
+      } else {
+        const q2 = query(collection(db, 'events'), where('title', '==', selectedEventName));
+        const snapshot2 = await getDocs(q2);
+        if (!snapshot2.empty) targetDocId = snapshot2.docs[0].id;
+      }
+    }
+
+    if (!targetDocId) {
+      setError(`Could not locate event "${selectedEventName}" in Firestore.`);
+      setDeleteConfirm(false);
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'events', targetDocId));
+      setSuccessMessage(`Event "${selectedEventName}" has been permanently deleted from Firestore.`);
+      resetForm();
+      await fetchEvents();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      setError(`Failed to delete event: ${err.message}`);
+    } finally {
+      setDeleteConfirm(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -669,11 +712,30 @@ export default function AdminUpload() {
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+            {mode === 'existing' && selectedEventName && (
+              <button
+                type="button"
+                className="btn-secondary btn-ink-stamp"
+                onClick={handleDeleteEvent}
+                disabled={uploading}
+                style={{
+                  marginRight: 'auto',
+                  background: deleteConfirm ? '#dc2626' : 'transparent',
+                  color: deleteConfirm ? '#fff' : 'var(--riso-red)',
+                  border: deleteConfirm ? '2px solid #dc2626' : '2px solid var(--riso-red)',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {deleteConfirm ? 'CONFIRM DELETE' : 'DELETE EVENT'}
+              </button>
+            )}
             <button
               type="button"
               className="btn-secondary btn-ink-stamp"
-              onClick={resetForm}
+              onClick={() => { resetForm(); setDeleteConfirm(false); }}
               disabled={uploading}
             >
               Clear
@@ -690,8 +752,8 @@ export default function AdminUpload() {
                 </>
               ) : (
                 mode === 'existing'
-                  ? 'SAVE CHANGES →'
-                  : `Publish ${files.length > 0 ? `${files.length} File${files.length > 1 ? 's' : ''}` : 'Showcase'} →`
+                  ? 'SAVE CHANGES \u2192'
+                  : `Publish ${files.length > 0 ? `${files.length} File${files.length > 1 ? 's' : ''}` : 'Showcase'} \u2192`
               )}
             </button>
           </div>

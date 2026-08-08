@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import Navbar from './Navbar';
+import HomeNavbar from './HomeNavbar';
 import Footer from './Footer';
 import useScrollReveal from '../hooks/useScrollReveal';
 
@@ -21,7 +21,7 @@ export default function EventDetailPage({ events, loading }) {
 
   return (
     <div className="app-wrapper">
-      <Navbar />
+      <HomeNavbar />
 
       <main className="container event-detail-main" style={{ padding: '60px 40px', minHeight: '75vh' }}>
         

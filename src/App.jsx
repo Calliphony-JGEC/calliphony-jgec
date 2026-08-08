@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { collection, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase/firebaseConfig';
-import Navbar from './components/Navbar';
+import HomeNavbar from './components/HomeNavbar';
 import Hero from './components/Hero';
 import EventsSection from './components/EventsSection';
 import SecretariesSection from './components/SecretariesSection';
@@ -18,6 +18,8 @@ import { filterValidEvents, checkMediaValidity } from './utils/mediaValidity';
 import AdminLogin from './components/admin/AdminLogin';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminUpload from './components/admin/AdminUpload';
+import AdminSecretaries from './components/admin/AdminSecretaries';
+import AdminIntake from './components/admin/AdminIntake';
 import ProtectedRoute from './components/admin/ProtectedRoute';
 
 // landing page
@@ -55,7 +57,7 @@ function LandingPage({ events }) {
 
   return (
     <div className="app-wrapper">
-      <Navbar />
+      <HomeNavbar />
       
       <main>
         <Hero />
@@ -199,6 +201,8 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin/upload" element={<AdminUpload />} />
+            <Route path="/admin/secretaries" element={<AdminSecretaries />} />
+            <Route path="/admin/intake" element={<AdminIntake />} />
           </Route>
         </Route>
       </Routes>

@@ -254,7 +254,7 @@ button {
 
 
 
-.navbar {
+.HomeNavbar {
   position: sticky;
   top: 0;
   z-index: 100;
@@ -262,7 +262,7 @@ button {
   border-bottom: 1px solid var(--border-ink);
 }
 
-.navbar-container {
+.HomeNavbar-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -271,7 +271,7 @@ button {
   margin: 0 auto;
 }
 
-.navbar, .navbar a, .navbar span, .navbar button, .nav-link-item, .admin-badge-btn {
+.HomeNavbar, .HomeNavbar a, .HomeNavbar span, .HomeNavbar button, .nav-link-item, .admin-badge-btn {
   font-family: var(--font-nav) !important;
   text-transform: lowercase !important;
 }
@@ -1011,11 +1011,11 @@ button {
 }
 
 
-.navbar {
+.HomeNavbar {
   transition: background-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease;
 }
 
-.navbar--scrolled {
+.HomeNavbar--scrolled {
   background: oklch(91% 0.034 30 / 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1599,7 +1599,7 @@ button {
     padding: 0 12px !important;
   }
 
-  .navbar-container {
+  .HomeNavbar-container {
     padding: 10px 12px !important;
   }
 
