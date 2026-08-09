@@ -1,10 +1,12 @@
 import React from 'react';
+import { BrandLogo } from './ThemeControls';
 
 export default function Footer() {
   return (
     <footer id="about" className="footer container">
       <div className="footer-content" data-reveal>
         <div>
+          <BrandLogo className="footer-logo-img" />
           <h3 style={{ fontFamily: 'var(--font-header)', fontSize: '1.3rem', fontWeight: 700, color: 'var(--ink-black)', marginBottom: '8px' }}>
             calliphony — music club.
           </h3>

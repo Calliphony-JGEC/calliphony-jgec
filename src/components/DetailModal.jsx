@@ -1,4 +1,5 @@
 import React from 'react';
+import { getEventThumbnail, getMediaPosterUrl } from '../utils/mediaThumb';
 
 export default function DetailModal({ isOpen, mode, onClose, events, secretaries }) {
   if (!isOpen) return null;
@@ -27,16 +28,13 @@ export default function DetailModal({ isOpen, mode, onClose, events, secretaries
             {events && events.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {events.map((ev) => {
-                  const firstItem = (ev.mediaList && ev.mediaList[0]) || { url: ev.mediaUrl, type: ev.mediaType };
+                  const cover = getEventThumbnail(ev);
+                  const poster = cover ? getMediaPosterUrl(cover) : '';
                   return (
                     <div key={ev.id} className="glass-card" style={{ padding: '20px', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center', borderRadius: 'var(--radius-md)' }}>
                       <div style={{ width: '180px', height: '120px', overflow: 'hidden', background: 'var(--bg-paper-dark)', flexShrink: 0, border: '1px solid var(--border-ink)', borderRadius: 'var(--radius-sm)', position: 'relative' }}>
-                        {firstItem.url ? (
-                          firstItem.type === 'video' ? (
-                            <video src={firstItem.url} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <img src={firstItem.url} alt={ev.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          )
+                        {poster ? (
+                          <img src={poster} alt={ev.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '10px' }}>
                             🎬 No media

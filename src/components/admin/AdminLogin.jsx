@@ -39,16 +39,7 @@ export default function AdminLogin() {
       await login(email, password);
       navigate('/admin/upload');
     } catch (err) {
-      const code = err.code;
-      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
-        setError('Invalid email or password.');
-      } else if (code === 'auth/wrong-password') {
-        setError('Incorrect password. Please try again.');
-      } else if (code === 'auth/too-many-requests') {
-        setError('Too many attempts. Please wait a moment and try again.');
-      } else {
-        setError('Login failed. Please check your credentials.');
-      }
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

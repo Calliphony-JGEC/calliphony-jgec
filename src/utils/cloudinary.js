@@ -5,17 +5,35 @@ export function isCloudinaryConfigured() {
   return Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET);
 }
 
+/** Cloudinary folders cannot reliably use spaces/special chars for later delete-by-URL. */
+export function sanitizeCloudinaryFolder(folder = '') {
+  return String(folder)
+    .trim()
+    .replace(/\/+/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .map((segment) =>
+      segment
+        .replace(/[^\w.-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+    )
+    .filter(Boolean)
+    .join('/');
+}
+
 export async function uploadToCloudinary(file, folder, onProgress) {
   const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
+  const safeFolder = sanitizeCloudinaryFolder(folder);
 
   const formData = new FormData();
   formData.append('file', file, file.name || 'media_upload');
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  formData.append('folder', folder);
+  if (safeFolder) formData.append('folder', safeFolder);
 
   let progress = 0;
   const progressInterval = setInterval(() => {
-    progress += (1 - progress) * 0.15; 
+    progress += (1 - progress) * 0.15;
     if (onProgress) onProgress(progress);
   }, 200);
 
@@ -24,9 +42,9 @@ export async function uploadToCloudinary(file, folder, onProgress) {
       method: 'POST',
       body: formData,
     });
-    
+
     clearInterval(progressInterval);
-    
+
     if (onProgress) onProgress(1);
 
     if (!response.ok) {
@@ -35,9 +53,19 @@ export async function uploadToCloudinary(file, folder, onProgress) {
     }
 
     const data = await response.json();
+    const resourceType = data.resource_type === 'video' ? 'video' : 'image';
+    let thumbnailUrl = '';
+    if (resourceType === 'video' && data.secure_url) {
+      thumbnailUrl = data.secure_url
+        .replace('/video/upload/', '/video/upload/so_0,f_jpg,q_auto/')
+        .replace(/\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i, '.jpg$2');
+    }
+
     return {
       secure_url: data.secure_url,
-      resource_type: data.resource_type,
+      resource_type: resourceType,
+      public_id: data.public_id || '',
+      thumbnail_url: thumbnailUrl,
     };
   } catch (err) {
     clearInterval(progressInterval);

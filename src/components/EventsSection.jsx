@@ -1,24 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getMediaPosterUrl, orderMediaWithThumbnail } from '../utils/mediaThumb';
 
+export const CAROUSEL_INTERVAL_MS = 2000;
+export const CAROUSEL_TRANSITION_DURATION = '0.55s';
 
-export const CAROUSEL_INTERVAL_MS = 2000; 
-export const CAROUSEL_TRANSITION_DURATION = '0.55s'; 
-
-export const HORIZONTAL_SCROLL_SENSITIVITY = 0.26; 
-
-
-export const START_BUFFER_PX = 280;
-export const END_BUFFER_PX = 420;
-
-function EventCard({ event, index }) {
+function EventCard({ event }) {
   const navigate = useNavigate();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
-  const allMedia = Array.isArray(event.mediaList) ? event.mediaList : [];
+  const previewMedia = orderMediaWithThumbnail(event);
 
-
-  const previewMedia = allMedia.filter(m => m.type !== 'video' && m.url);
+  useEffect(() => {
+    setCurrentIdx(0);
+  }, [event.id, event.thumbnailUrl, event.docId]);
 
   useEffect(() => {
     if (!isHovered || previewMedia.length <= 1) return;
@@ -35,7 +30,10 @@ function EventCard({ event, index }) {
       className="event-card glass-card tilt-card"
       onClick={() => navigate(`/events/${encodeURIComponent(event.id)}`)}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setCurrentIdx(0);
+      }}
       style={{
         flex: '0 0 auto',
         width: 'clamp(260px, 82vw, 440px)',
@@ -44,28 +42,32 @@ function EventCard({ event, index }) {
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: isHovered ? '0 18px 45px oklch(18% 0.08 30 / 0.22)' : '0 10px 30px oklch(18% 0.06 30 / 0.12)',
+        boxShadow: isHovered
+          ? '0 18px 45px color-mix(in srgb, var(--text-primary) 22%, transparent)'
+          : '0 10px 30px color-mix(in srgb, var(--text-primary) 12%, transparent)',
         border: isHovered ? '1px solid var(--riso-red)' : '1px solid var(--border-ink)',
         transform: isHovered ? 'translateY(-6px)' : undefined,
+        scrollSnapAlign: 'start',
       }}
       title={`Click to view all photos, videos & stories for ${event.title}`}
     >
-      <div 
-        className="event-media-container" 
-        style={{ 
-          position: 'relative', 
-          height: 'clamp(240px, 36vh, 340px)', 
-          width: '100%', 
-          overflow: 'hidden', 
-          backgroundColor: 'var(--bg-paper-dark)' 
+      <div
+        className="event-media-container"
+        style={{
+          position: 'relative',
+          height: 'clamp(240px, 36vh, 340px)',
+          width: '100%',
+          overflow: 'hidden',
+          backgroundColor: 'var(--bg-paper-dark)',
         }}
       >
         {previewMedia.length > 0 ? (
           previewMedia.map((media, idx) => {
             const isActive = idx === activeIndex;
+            const poster = media.posterUrl || getMediaPosterUrl(media);
             return (
               <div
-                key={media.id || idx}
+                key={media.id || media.url || idx}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -82,7 +84,7 @@ function EventCard({ event, index }) {
                 }}
               >
                 <img
-                  src={media.url}
+                  src={poster}
                   alt={`${event.title} (${idx + 1})`}
                   style={{
                     width: '100%',
@@ -90,22 +92,67 @@ function EventCard({ event, index }) {
                     objectFit: 'cover',
                     display: 'block',
                     transform: isActive ? 'scale(1.03)' : 'scale(1)',
-                    transition: `transform ${CAROUSEL_INTERVAL_MS / 1000 + 0.5}s linear`
+                    transition: `transform ${CAROUSEL_INTERVAL_MS / 1000 + 0.5}s linear`,
                   }}
                 />
+                {media.type === 'video' && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none',
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.35), transparent 45%)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.55)',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.1rem',
+                      }}
+                    >
+                      ▶
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })
         ) : (
-          <div className="placeholder-box" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <div
+            className="placeholder-box"
+            style={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+            }}
+          >
             <span style={{ fontSize: '2.5rem' }}>🎬</span>
-            <span style={{ color: 'var(--ink-muted)', fontStyle: 'italic', fontSize: '0.95rem', fontFamily: 'var(--font-subtext)' }}>
-              {allMedia.length > 0 ? 'Video Archive (Click to view)' : 'No media attached'}
+            <span
+              style={{
+                color: 'var(--ink-muted)',
+                fontStyle: 'italic',
+                fontSize: '0.95rem',
+                fontFamily: 'var(--font-subtext)',
+              }}
+            >
+              No media attached
             </span>
           </div>
         )}
 
-        {/* mini carousel dots */}
         {previewMedia.length > 1 && (
           <div className="mini-carousel-dots" style={{ zIndex: 10, bottom: '14px' }}>
             {previewMedia.map((_, idx) => (
@@ -123,7 +170,7 @@ function EventCard({ event, index }) {
                   backgroundColor: idx === activeIndex ? 'var(--riso-red)' : 'rgba(255, 255, 255, 0.7)',
                   transition: 'all 0.3s ease',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
                 }}
               />
             ))}
@@ -131,8 +178,16 @@ function EventCard({ event, index }) {
         )}
       </div>
 
-      
-      <div style={{ padding: '20px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-ink)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div
+        style={{
+          padding: '20px 24px',
+          background: 'var(--bg-card)',
+          borderTop: '1px solid var(--border-ink)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
         <h3
           style={{
             fontFamily: 'var(--font-header)',
@@ -149,7 +204,15 @@ function EventCard({ event, index }) {
         >
           {event.title || 'Untitled Event'}
         </h3>
-        <span style={{ fontSize: '1.4rem', opacity: isHovered ? 1 : 0.7, color: 'var(--riso-red)', transform: isHovered ? 'translate(3px, -3px)' : 'none', transition: 'all 0.3s ease' }}>
+        <span
+          style={{
+            fontSize: '1.4rem',
+            opacity: isHovered ? 1 : 0.7,
+            color: 'var(--riso-red)',
+            transform: isHovered ? 'translate(3px, -3px)' : 'none',
+            transition: 'all 0.3s ease',
+          }}
+        >
           ↗
         </span>
       </div>
@@ -158,174 +221,115 @@ function EventCard({ event, index }) {
 }
 
 export default function EventsSection({ events }) {
-  const sectionRef = useRef(null);
-  const viewportRef = useRef(null);
-  const trackRef = useRef(null);
-  const clipBoxRef = useRef(null);
-  const [maxScroll, setMaxScroll] = useState(0);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
-
-  // measure track width relative to clipping box and update mobile status on resize
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth <= 768;
-      setIsMobile(mobile);
-      if (mobile) {
-        if (trackRef.current) trackRef.current.style.transform = '';
-        return;
-      }
-      if (!trackRef.current || !clipBoxRef.current) return;
-      const trackWidth = trackRef.current.scrollWidth;
-      const boxWidth = clipBoxRef.current.clientWidth;
-      const calculatedMax = Math.max(0, trackWidth - boxWidth);
-      setMaxScroll(calculatedMax);
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [events]);
-
-  
-  useEffect(() => {
-    if (isMobile) {
-      if (trackRef.current) trackRef.current.style.transform = '';
-      return;
-    }
-
-    let rafId;
-    const handleScroll = () => {
-      if (isMobile || !sectionRef.current || !trackRef.current || maxScroll <= 0) return;
-      
-      rafId = requestAnimationFrame(() => {
-        const rect = sectionRef.current.getBoundingClientRect();
-        const scrolled = -rect.top;
-        const activeScroll = Math.max(0, scrolled - START_BUFFER_PX);
-        const targetX = activeScroll * HORIZONTAL_SCROLL_SENSITIVITY;
-        const clampedScroll = Math.max(0, Math.min(targetX, maxScroll));
-        
-        if (trackRef.current) {
-          trackRef.current.style.transform = `translate3d(-${clampedScroll}px, 0, 0)`;
-        }
-      });
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [maxScroll, isMobile]);
-
-  
   if (!events || events.length === 0) {
     return (
       <section id="events" className="events-section container" style={{ padding: '60px 40px' }}>
         <div className="section-header" style={{ marginBottom: '40px' }}>
-          <span style={{ display: 'block', color: 'var(--riso-red)', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px', fontFamily: 'var(--font-label)' }}>
+          <span
+            style={{
+              display: 'block',
+              color: 'var(--riso-red)',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginBottom: '8px',
+              fontFamily: 'var(--font-label)',
+            }}
+          >
             ■ Media Feed
           </span>
           <h2 className="section-heading">live showcases & memories.</h2>
         </div>
-        <div className="glass-card" style={{ padding: '60px 40px', textAlign: 'center', borderRadius: 'var(--radius-md)', margin: '20px 0', opacity: 1 }}>
+        <div
+          className="glass-card"
+          style={{
+            padding: '60px 40px',
+            textAlign: 'center',
+            borderRadius: 'var(--radius-md)',
+            margin: '20px 0',
+            opacity: 1,
+          }}
+        >
           <div style={{ fontSize: '3rem', marginBottom: '16px', opacity: 0.6 }}>🎬</div>
-          <h3 style={{ fontFamily: 'var(--font-header)', fontSize: '1.4rem', color: 'var(--ink-black)', marginBottom: '8px' }}>
+          <h3
+            style={{
+              fontFamily: 'var(--font-header)',
+              fontSize: '1.4rem',
+              color: 'var(--ink-black)',
+              marginBottom: '8px',
+            }}
+          >
             No showcases published yet
           </h3>
-          <p style={{ color: 'var(--ink-muted)', fontSize: '0.95rem', maxWidth: '480px', margin: '0 auto', lineHeight: 1.6 }}>
-            Club administrators can log in via the top-right Admin button to directly upload photos and videos and publish live showcases.
+          <p
+            style={{
+              color: 'var(--ink-muted)',
+              fontSize: '0.95rem',
+              maxWidth: '480px',
+              margin: '0 auto',
+              lineHeight: 1.6,
+            }}
+          >
+            Club administrators can log in via the top-right Admin button to directly upload photos and
+            videos and publish live showcases.
           </p>
         </div>
       </section>
     );
   }
 
-  
-  const verticalDistanceNeeded = (!isMobile && maxScroll > 0) ? (START_BUFFER_PX + (maxScroll / HORIZONTAL_SCROLL_SENSITIVITY) + END_BUFFER_PX) : 0;
-  const dynamicHeight = (!isMobile && verticalDistanceNeeded > 0) ? `calc(100vh + ${verticalDistanceNeeded}px)` : 'auto';
-
   return (
-    <section 
-      id="events" 
-      ref={sectionRef} 
-      className="events-section-sticky-wrapper" 
-      style={{ 
-        position: 'relative', 
-        height: dynamicHeight,
-        marginBottom: isMobile ? '40px' : '60px'
-      }}
+    <section
+      id="events"
+      className="events-section container"
+      style={{ position: 'relative', marginBottom: '60px', paddingTop: '96px', paddingBottom: '40px' }}
     >
-      <div
-        ref={viewportRef}
-        style={{
-          position: isMobile ? 'relative' : 'sticky',
-          top: 0,
-          height: isMobile ? 'auto' : '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start', 
-          paddingTop: isMobile ? '28px' : '96px', 
-          paddingBottom: '20px',
-          overflow: isMobile ? 'visible' : 'hidden',
-        }}
-      >
-        
-        <div className="container" style={{ marginBottom: isMobile ? '16px' : '24px', flexShrink: 0 }} data-reveal>
-          <span style={{ display: 'block', color: 'var(--riso-red)', fontWeight: 700, fontSize: isMobile ? '0.75rem' : '0.85rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontFamily: 'var(--font-label)' }}>
-            ■ Media Feed & Interactive Gallery
-          </span>
-          <h2 className="section-heading" style={{ fontSize: 'clamp(2rem, 8.5vw, 4rem)', lineHeight: 1, marginBottom: '6px' }}>
-            live events & showcases.
-          </h2>
-          <p className="section-subtitle" style={{ marginBottom: 0, maxWidth: '680px', fontSize: isMobile ? '0.85rem' : '0.95rem' }}>
-            Relive our most electrifying concerts and acoustic performances!
-            {isMobile 
-              ? ' Swipe horizontally across our showcase timeline. Tap any card to open full photo & video archives.' 
-              : ' Scroll down to seamlessly slide across our showcase timeline. Hover over any card to preview pictures or click to open full archives.'}
-          </p>
-        </div>
-
-       
-        <div 
-          className="container" 
-          data-reveal
-          data-reveal-delay="0.15"
-          style={{ 
-            flex: 1, 
-            minHeight: 0, 
-            display: 'flex', 
-            alignItems: 'center', 
-            paddingTop: '4px',
-            paddingBottom: '10px'
+      <div style={{ marginBottom: '24px' }} data-reveal>
+        <span
+          style={{
+            display: 'block',
+            color: 'var(--riso-red)',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            marginBottom: '6px',
+            fontFamily: 'var(--font-label)',
           }}
         >
-          {/*clip box*/}
-          <div 
-            ref={clipBoxRef}
-            style={{ 
-              width: '100%', 
-              overflow: isMobile ? 'visible' : 'hidden', 
-              padding: '10px 0' 
-            }}
-          >
-            <div
-              ref={trackRef}
-              className={`showcases-track ${isMobile ? 'mobile-horizontal-scroll' : ''}`}
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                flexWrap: 'nowrap',
-                gap: isMobile ? '16px' : '28px',
-                width: isMobile ? '100%' : 'max-content',
-                willChange: isMobile ? 'auto' : 'transform',
-                transition: isMobile ? 'none' : 'transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)',
-              }}
-            >
-              {events.map((event, index) => (
-                <EventCard key={event.id || index} event={event} index={index} />
-              ))}
-            </div>
-          </div>
+          ■ Media Feed & Interactive Gallery
+        </span>
+        <h2
+          className="section-heading"
+          style={{ fontSize: 'clamp(2rem, 8.5vw, 4rem)', lineHeight: 1, marginBottom: '6px' }}
+        >
+          live events & showcases.
+        </h2>
+        <p className="section-subtitle" style={{ marginBottom: 0, maxWidth: '680px', fontSize: '0.95rem' }}>
+          Relive our most electrifying concerts and acoustic performances! Scroll horizontally across our
+          showcase timeline. Hover over any card to preview pictures or click to open full archives.
+        </p>
+      </div>
+
+      <div data-reveal data-reveal-delay="0.15" style={{ paddingTop: '4px', paddingBottom: '10px' }}>
+        <div
+          className="showcases-track mobile-horizontal-scroll"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'nowrap',
+            gap: '28px',
+            width: '100%',
+            overflowX: 'auto',
+            padding: '10px 0 16px',
+            scrollSnapType: 'x mandatory',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {events.map((event, index) => (
+            <EventCard key={event.id || index} event={event} />
+          ))}
         </div>
       </div>
     </section>

@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../firebase/firebaseConfig';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { uploadToCloudinary, isCloudinaryConfigured } from '../../utils/cloudinary';
+import { api } from '../../api/client';
 
-const YEAR_OPTIONS = ['2026-2027', '2025-2026', '2024-2025', '2023-2024'];
 const ICON_OPTIONS = [
   { value: '\ud83c\udfb5', label: '\ud83c\udfb5' },
   { value: '\ud83c\udfa4', label: '\ud83c\udfa4' },
@@ -42,13 +40,19 @@ export default function AdminSecretaries() {
   const fileInputRef = useRef(null);
   const editFileInputRef = useRef(null);
 
+  // Optional autocomplete from years already saved — does not limit what you can type
+  const existingYearHints = useMemo(() => {
+    return [...new Set(secretariesList.map((s) => (s.year || '').trim()).filter(Boolean))]
+      .sort((a, b) => b.localeCompare(a));
+  }, [secretariesList]);
+
   const fetchSecretaries = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'secretaries'));
-      const list = [];
-      snapshot.forEach((docSnap) => {
-        list.push({ docId: docSnap.id, ...docSnap.data() });
-      });
+      const data = await api.getSecretaries();
+      const list = (data.secretaries || []).map((item) => ({
+        docId: item.id || item.docId,
+        ...item,
+      }));
       list.sort((a, b) => {
         const yearCmp = (b.year || '').localeCompare(a.year || '');
         if (yearCmp !== 0) return yearCmp;
@@ -166,13 +170,13 @@ export default function AdminSecretaries() {
           setUploadProgress(Math.round(progress * 100));
         });
 
-        await addDoc(collection(db, 'secretaries'), {
+        await api.createSecretary({
           year: year,
           name: name.trim(),
           role: role.trim(),
           icon: icon || '\ud83c\udfb5',
           image: result.secure_url,
-          createdAt: serverTimestamp(),
+          imagePublicId: result.public_id || '',
         });
 
         setSuccessMessage(`Successfully added ${name.trim()} as ${role.trim()} for ${year}.`);
@@ -204,21 +208,28 @@ export default function AdminSecretaries() {
 
       try {
         let finalImageUrl = editImageUrl;
+        let finalPublicId;
 
         if (editImageFile) {
           const result = await uploadToCloudinary(editImageFile, 'calliphony-secretaries', (progress) => {
             setUploadProgress(Math.round(progress * 100));
           });
           finalImageUrl = result.secure_url;
+          finalPublicId = result.public_id || '';
         }
 
-        await updateDoc(doc(db, 'secretaries', selectedSecId), {
+        const updatePayload = {
           year: editYear,
           name: editName.trim(),
           role: editRole.trim(),
           icon: editIcon || '\ud83c\udfb5',
           image: finalImageUrl,
-        });
+        };
+        if (finalPublicId != null) {
+          updatePayload.imagePublicId = finalPublicId;
+        }
+
+        await api.updateSecretary(selectedSecId, updatePayload);
 
         setSuccessMessage(`Successfully updated ${editName.trim()}.`);
         clearEditImage();
@@ -241,8 +252,15 @@ export default function AdminSecretaries() {
     }
 
     try {
-      await deleteDoc(doc(db, 'secretaries', docId));
-      setSuccessMessage(`Removed ${secName} from the roster.`);
+      const result = await api.deleteSecretary(docId);
+      const deletedCount = Number(result?.cloudinary?.deletedCount || 0);
+      if (deletedCount === 0) {
+        setSuccessMessage(
+          `Removed ${secName} from the roster, but the Cloudinary image was not deleted. Check the API terminal for details.`
+        );
+      } else {
+        setSuccessMessage(`Removed ${secName} from the roster (Cloudinary image deleted).`);
+      }
       setDeleteConfirmId(null);
       if (selectedSecId === docId) {
         setSelectedSecId('');
@@ -285,7 +303,7 @@ export default function AdminSecretaries() {
           manage secretaries.
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.95rem', fontFamily: 'var(--font-body)', maxWidth: '600px' }}>
-          Add, edit, and remove club secretaries. Photos are stored in Cloudinary and metadata in Firestore.
+          Add, edit, and remove club secretaries. Photos are stored in Cloudinary and metadata in MongoDB.
         </p>
       </div>
 
@@ -326,19 +344,25 @@ export default function AdminSecretaries() {
             <>
               <div className="form-group">
                 <label htmlFor="sec-year">Academic Year</label>
-                <select
+                <input
                   id="sec-year"
-                  className="form-select"
+                  type="text"
+                  className="form-input"
+                  list={existingYearHints.length ? 'sec-year-hints' : undefined}
+                  placeholder="Type any year (e.g. 2019-2020 or 2030-2031)"
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
                   disabled={uploading}
                   required
-                >
-                  <option value="">Select a year</option>
-                  {YEAR_OPTIONS.map((yr) => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
+                  autoComplete="off"
+                />
+                {existingYearHints.length > 0 && (
+                  <datalist id="sec-year-hints">
+                    {existingYearHints.map((yr) => (
+                      <option key={yr} value={yr} />
+                    ))}
+                  </datalist>
+                )}
               </div>
 
               <div className="form-group">
@@ -477,18 +501,25 @@ export default function AdminSecretaries() {
 
                   <div className="form-group" style={{ marginBottom: '16px' }}>
                     <label htmlFor="edit-sec-year" style={{ fontSize: '0.88rem' }}>Academic Year</label>
-                    <select
+                    <input
                       id="edit-sec-year"
-                      className="form-select"
+                      type="text"
+                      className="form-input"
+                      list={existingYearHints.length ? 'edit-sec-year-hints' : undefined}
+                      placeholder="Type any year (e.g. 2019-2020 or 2030-2031)"
                       value={editYear}
                       onChange={(e) => setEditYear(e.target.value)}
                       disabled={uploading}
-                    >
-                      <option value="">Select a year</option>
-                      {YEAR_OPTIONS.map((yr) => (
-                        <option key={yr} value={yr}>{yr}</option>
-                      ))}
-                    </select>
+                      required
+                      autoComplete="off"
+                    />
+                    {existingYearHints.length > 0 && (
+                      <datalist id="edit-sec-year-hints">
+                        {existingYearHints.map((yr) => (
+                          <option key={yr} value={yr} />
+                        ))}
+                      </datalist>
+                    )}
                   </div>
 
                   <div className="form-group" style={{ marginBottom: '16px' }}>

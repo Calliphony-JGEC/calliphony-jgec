@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const DEFAULT_YEARS = ['2026-2027', '2025-2026', '2024-2025', '2023-2024'];
-
 export default function SecretariesSection({ secretaries, onOpenDetailedView }) {
-  const firestoreYears = Object.keys(secretaries);
-  const allYears = [...new Set([...DEFAULT_YEARS, ...firestoreYears])].sort((a, b) => b.localeCompare(a));
-  const [activeYear, setActiveYear] = useState(allYears[0]);
+  const allYears = Object.keys(secretaries || {}).sort((a, b) => b.localeCompare(a));
+  const [activeYear, setActiveYear] = useState(allYears[0] || '');
   const scrollRef = useRef(null);
 
   useEffect(() => {
     if (!allYears.includes(activeYear)) {
-      setActiveYear(allYears[0]);
+      setActiveYear(allYears[0] || '');
     }
   }, [allYears.join(',')]);
 

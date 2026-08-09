@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import HomeNavbar from './HomeNavbar';
 import Footer from './Footer';
 import useScrollReveal from '../hooks/useScrollReveal';
+import { getMediaPosterUrl, orderMediaWithThumbnail } from '../utils/mediaThumb';
 
 export default function EventDetailPage({ events, loading }) {
   const { eventId } = useParams();
@@ -18,6 +19,7 @@ export default function EventDetailPage({ events, loading }) {
 
   const decodedId = decodeURIComponent(eventId || '');
   const event = events.find((e) => e.id === decodedId || e.title === decodedId);
+  const orderedMedia = event ? orderMediaWithThumbnail(event) : [];
 
   return (
     <div className="app-wrapper">
@@ -129,10 +131,10 @@ export default function EventDetailPage({ events, loading }) {
                 alignItems: 'start',
               }}
             >
-              {event.mediaList && event.mediaList.length > 0 ? (
-                event.mediaList.map((item, idx) => (
+              {orderedMedia.length > 0 ? (
+                orderedMedia.map((item, idx) => (
                   <div
-                    key={item.id || idx}
+                    key={item.id || item.url || idx}
                     className="glass-card"
                     data-reveal
                     data-reveal-delay={`${Math.min(0.1 + idx * 0.05, 0.5)}`}
@@ -143,15 +145,18 @@ export default function EventDetailPage({ events, loading }) {
                       cursor: item.type === 'video' ? 'default' : 'pointer',
                       aspectRatio: '4/3',
                       backgroundColor: 'var(--bg-paper-dark)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                      outline: item.isCover ? '2px solid var(--riso-red)' : undefined,
                     }}
                     onClick={() => item.type !== 'video' && setSelectedMedia(item)}
                   >
                     {item.type === 'video' ? (
                       <video
                         src={item.url}
+                        poster={item.posterUrl || getMediaPosterUrl(item)}
                         controls
                         playsInline
+                        preload="metadata"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       />
                     ) : (
@@ -163,7 +168,7 @@ export default function EventDetailPage({ events, loading }) {
                       />
                     )}
                     <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, backdropFilter: 'blur(4px)', pointerEvents: 'none' }}>
-                      {item.type === 'video' ? '🎬 Video' : `📷 #${idx + 1}`}
+                      {item.isCover ? '★ Cover' : item.type === 'video' ? '🎬 Video' : `📷 #${idx + 1}`}
                     </div>
                   </div>
                 ))

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc, query, where, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../firebase/firebaseConfig';
 import { checkMediaValidity, filterValidEvents } from '../../utils/mediaValidity';
 import { uploadToCloudinary, isCloudinaryConfigured } from '../../utils/cloudinary';
+import { getMediaPosterUrl } from '../../utils/mediaThumb';
+import { api } from '../../api/client';
 
 
 export default function AdminUpload() {
@@ -20,6 +20,8 @@ export default function AdminUpload() {
   const [selectedEventName, setSelectedEventName] = useState('');
   const [existingEventsList, setExistingEventsList] = useState([]);
   const [existingMedia, setExistingMedia] = useState([]);
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [thumbnailFileId, setThumbnailFileId] = useState('');
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -31,35 +33,25 @@ export default function AdminUpload() {
   
   const fetchEvents = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'events'));
-      const evList = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const name = (data.eventName || data.title || '').trim();
-        if (name) {
-          let mediaList = Array.isArray(data.mediaList) ? [...data.mediaList] : [];
-          if (data.mediaUrl && !mediaList.some(m => m.url === data.mediaUrl)) {
-            mediaList.unshift({ url: data.mediaUrl, type: data.mediaType || 'image' });
-          }
-          evList.push({
-            docId: docSnap.id,
-            name,
-            ...data,
-            mediaList,
-          });
-        }
-      });
+      const data = await api.getEvents();
+      const evList = (data.events || []).map((item) => {
+        const name = (item.eventName || item.title || '').trim();
+        let mediaList = Array.isArray(item.mediaList) ? [...item.mediaList] : [];
+        return {
+          docId: item.id || item.docId,
+          name,
+          ...item,
+          mediaList,
+        };
+      }).filter((ev) => ev.name);
       evList.sort((a, b) => a.name.localeCompare(b.name));
       const validEvList = await filterValidEvents(evList);
-      // prune the docs from firestore if deleted from cloudinary
-      evList.forEach(async (ev) => {
-        if (!validEvList.some(v => v.docId === ev.docId)) {
-          try { await deleteDoc(doc(db, 'events', ev.docId)); } catch (e) { console.warn(e); }
-        }
-      });
-      setExistingEventsList(validEvList);
+      // Do not auto-delete events when media checks fail — that left Cloudinary orphans.
+      setExistingEventsList(validEvList.length ? validEvList : evList);
+      return validEvList.length ? validEvList : evList;
     } catch (err) {
       console.warn('Could not fetch existing events:', err);
+      return [];
     }
   };
 
@@ -67,9 +59,12 @@ export default function AdminUpload() {
     fetchEvents();
   }, []);
 
+  // Only re-sync form fields when the selected event (or mode) changes — not when the list refreshes,
+  // so an in-progress thumbnail choice is not overwritten.
   useEffect(() => {
     let isCancelled = false;
     setDeleteConfirm(false);
+
     const syncExistingMedia = async () => {
       if (mode === 'existing' && selectedEventName) {
         const found = existingEventsList.find((ev) => ev.name === selectedEventName);
@@ -77,6 +72,8 @@ export default function AdminUpload() {
           setEditEventName(found.eventName || found.title || found.name || '');
           setEditEventDate(found.eventDate || found.date || '');
           setEditEventDescription(found.eventDescription || found.description || '');
+          setThumbnailUrl(found.thumbnailUrl || found.mediaList?.[0]?.url || '');
+          setThumbnailFileId('');
         }
         if (found && Array.isArray(found.mediaList)) {
           const validity = await Promise.all(
@@ -85,6 +82,11 @@ export default function AdminUpload() {
           if (!isCancelled) {
             const liveMedia = found.mediaList.filter((_, i) => validity[i]);
             setExistingMedia(liveMedia);
+            const preferred =
+              (found.thumbnailUrl && liveMedia.find((m) => m.url === found.thumbnailUrl)?.url) ||
+              liveMedia[0]?.url ||
+              '';
+            setThumbnailUrl(preferred);
           }
         } else if (!isCancelled) {
           setExistingMedia([]);
@@ -94,14 +96,71 @@ export default function AdminUpload() {
         setEditEventName('');
         setEditEventDate('');
         setEditEventDescription('');
+        setThumbnailUrl('');
+        setThumbnailFileId('');
       }
     };
-    syncExistingMedia();
-    return () => { isCancelled = true; };
-  }, [mode, selectedEventName, existingEventsList]);
 
+    syncExistingMedia();
+    return () => {
+      isCancelled = true;
+    };
+    // intentionally not depending on existingEventsList — refreshed list is merged via fetchEvents callers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedEventName]);
+
+  const applyThumbnailSelection = async (url) => {
+    setThumbnailUrl(url);
+    setThumbnailFileId('');
+
+    if (mode !== 'existing' || !selectedEventName) return;
+
+    const foundEvent = existingEventsList.find((ev) => ev.name === selectedEventName);
+    const targetDocId = foundEvent?.docId;
+    if (!targetDocId || !url) return;
+
+    const currentMedia = existingMedia.length
+      ? existingMedia
+      : foundEvent.mediaList || [];
+    const cover = currentMedia.find((m) => m.url === url);
+    if (!cover) {
+      setError('Selected media was not found on this event.');
+      return;
+    }
+    const reordered = [cover, ...currentMedia.filter((m) => m.url !== url)];
+
+    try {
+      setError('');
+      const { event: updated } = await api.updateEvent(targetDocId, {
+        thumbnailUrl: url,
+        mediaList: reordered,
+      });
+      const nextThumb = updated?.thumbnailUrl || url;
+      const nextMedia = updated?.mediaList || reordered;
+      setThumbnailUrl(nextThumb);
+      setExistingMedia(nextMedia);
+      setExistingEventsList((prev) =>
+        prev.map((ev) =>
+          ev.docId === targetDocId
+            ? { ...ev, thumbnailUrl: nextThumb, mediaList: nextMedia }
+            : ev
+        )
+      );
+      setSuccessMessage('Gallery thumbnail updated. Open Gallery to see the new cover.');
+    } catch (err) {
+      console.error('Failed to set thumbnail:', err);
+      setError(`Could not save thumbnail: ${err.message || 'Unknown error'}`);
+    }
+  };
   const removeExistingMediaItem = (indexToRemove) => {
-    setExistingMedia((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setExistingMedia((prev) => {
+      const removed = prev[indexToRemove];
+      const next = prev.filter((_, idx) => idx !== indexToRemove);
+      if (removed && removed.url === thumbnailUrl) {
+        setThumbnailUrl(next[0]?.url || '');
+      }
+      return next;
+    });
   };
 
   const handleFileChange = (e) => {
@@ -111,10 +170,20 @@ export default function AdminUpload() {
     const newFiles = selected.map((file) => ({
       file,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      preview: file.type.startsWith('image/')
+        ? URL.createObjectURL(file)
+        : file.type.startsWith('video/')
+          ? URL.createObjectURL(file)
+          : null,
     }));
 
-    setFiles((prev) => [...prev, ...newFiles]);
+    setFiles((prev) => {
+      const merged = [...prev, ...newFiles];
+      if (!thumbnailFileId && !thumbnailUrl && merged.length > 0) {
+        setThumbnailFileId(merged[0].id);
+      }
+      return merged;
+    });
   };
 
   const removeFile = (id) => {
@@ -124,6 +193,9 @@ export default function AdminUpload() {
       const remaining = prev.filter((f) => f.id !== id);
       if (remaining.length === 0 && fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      if (thumbnailFileId === id) {
+        setThumbnailFileId(remaining[0]?.id || '');
       }
       return remaining;
     });
@@ -150,6 +222,8 @@ export default function AdminUpload() {
     setEditEventDate('');
     setEditEventDescription('');
     setExistingMedia([]);
+    setThumbnailUrl('');
+    setThumbnailFileId('');
     setError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -169,29 +243,31 @@ export default function AdminUpload() {
     }
 
     const foundEvent = existingEventsList.find((ev) => ev.name === selectedEventName);
-    let targetDocId = foundEvent ? foundEvent.docId : null;
+    const targetDocId = foundEvent ? foundEvent.docId : null;
 
     if (!targetDocId) {
-      const q = query(collection(db, 'events'), where('eventName', '==', selectedEventName));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        targetDocId = snapshot.docs[0].id;
-      } else {
-        const q2 = query(collection(db, 'events'), where('title', '==', selectedEventName));
-        const snapshot2 = await getDocs(q2);
-        if (!snapshot2.empty) targetDocId = snapshot2.docs[0].id;
-      }
-    }
-
-    if (!targetDocId) {
-      setError(`Could not locate event "${selectedEventName}" in Firestore.`);
+      setError(`Could not locate event "${selectedEventName}".`);
       setDeleteConfirm(false);
       return;
     }
 
     try {
-      await deleteDoc(doc(db, 'events', targetDocId));
-      setSuccessMessage(`Event "${selectedEventName}" has been permanently deleted from Firestore.`);
+      const result = await api.deleteEvent(targetDocId);
+      const deletedCount = Number(result?.cloudinary?.deletedCount || 0);
+      const failedCount = Number(result?.cloudinary?.failedCount || 0);
+      if (deletedCount === 0) {
+        setSuccessMessage(
+          `Event "${selectedEventName}" was removed from the site, but no Cloudinary files were deleted. Check the API terminal for details.`
+        );
+      } else if (failedCount > 0) {
+        setSuccessMessage(
+          `Event "${selectedEventName}" removed. Deleted ${deletedCount} Cloudinary file(s); ${failedCount} could not be removed.`
+        );
+      } else {
+        setSuccessMessage(
+          `Event "${selectedEventName}" permanently deleted (${deletedCount} Cloudinary file(s) removed).`
+        );
+      }
       resetForm();
       await fetchEvents();
     } catch (err) {
@@ -243,66 +319,77 @@ export default function AdminUpload() {
 
       if (totalFiles > 0) {
         for (const fileObj of files) {
-          const { file } = fileObj;
+          const { file, id: fileId } = fileObj;
           const cleanFolder = `calliphony-events/${finalEventName.trim().replace(/\/+/g, '-')}`;
           const result = await uploadToCloudinary(file, cleanFolder, (fileProgress) => {
             const overallProgress = ((completedFiles + fileProgress) / totalFiles) * 100;
             setUploadProgress(Math.round(overallProgress));
           });
 
-          uploadedMedia.push({
+          const mediaItem = {
             url: result.secure_url,
             type: result.resource_type === 'video' ? 'video' : 'image',
-          });
+            publicId: result.public_id || '',
+            resourceType: result.resource_type === 'video' ? 'video' : 'image',
+            thumbnailUrl: result.thumbnail_url || '',
+            _localFileId: fileId,
+          };
+          uploadedMedia.push(mediaItem);
 
           completedFiles++;
           setUploadProgress(Math.round((completedFiles / totalFiles) * 100));
         }
       }
 
+      const uploadedThumb = uploadedMedia.find((m) => m._localFileId === thumbnailFileId);
+      let resolvedThumbnail = '';
+      if (uploadedThumb?.url) {
+        resolvedThumbnail = uploadedThumb.url;
+      } else if (
+        thumbnailUrl &&
+        (existingMedia.some((m) => m.url === thumbnailUrl) ||
+          uploadedMedia.some((m) => m.url === thumbnailUrl))
+      ) {
+        resolvedThumbnail = thumbnailUrl;
+      } else {
+        resolvedThumbnail = existingMedia[0]?.url || uploadedMedia[0]?.url || '';
+      }
+
+      const stripLocal = (list) =>
+        list.map(({ _localFileId, ...rest }) => rest);
+
       if (mode === 'new') {
-        const docData = {
+        await api.createEvent({
           eventName: finalEventName,
           title: finalEventName,
           eventDate: eventDate.trim(),
           eventDescription: eventDescription.trim(),
-          mediaList: uploadedMedia,
-          createdAt: serverTimestamp(),
-        };
-
-        await addDoc(collection(db, 'events'), docData);
-        setSuccessMessage(`Successfully published ${totalFiles} file${totalFiles > 1 ? 's' : ''} to Cloudinary folder "calliphony-events/${finalEventName}" and created event in Firestore!`);
+          mediaList: stripLocal(uploadedMedia),
+          thumbnailUrl: resolvedThumbnail,
+        });
+        setSuccessMessage(`Successfully published ${totalFiles} file${totalFiles > 1 ? 's' : ''} to Cloudinary folder "calliphony-events/${finalEventName}" and created the event!`);
         resetForm();
         await fetchEvents();
       } else {
         const foundEvent = existingEventsList.find((ev) => ev.name === finalEventName);
-        let targetDocId = foundEvent ? foundEvent.docId : null;
-
-        if (!targetDocId) {
-          const q = query(collection(db, 'events'), where('eventName', '==', finalEventName));
-          const snapshot = await getDocs(q);
-          if (!snapshot.empty) {
-            targetDocId = snapshot.docs[0].id;
-          } else {
-            const q2 = query(collection(db, 'events'), where('title', '==', finalEventName));
-            const snapshot2 = await getDocs(q2);
-            if (!snapshot2.empty) targetDocId = snapshot2.docs[0].id;
-          }
-        }
+        const targetDocId = foundEvent ? foundEvent.docId : null;
 
         if (targetDocId) {
-          // synchronize the retained existing media plus any newly uploaded cloudinary items and updated metadata
-          const updatedMediaList = [...existingMedia, ...uploadedMedia];
+          const updatedMediaList = stripLocal([...existingMedia, ...uploadedMedia]);
           const newName = (editEventName || finalEventName).trim();
-          await updateDoc(doc(db, 'events', targetDocId), {
+          await api.updateEvent(targetDocId, {
             eventName: newName,
             title: newName,
             eventDate: (editEventDate || '').trim(),
             eventDescription: (editEventDescription || '').trim(),
-            mediaList: updatedMediaList
+            mediaList: updatedMediaList,
+            thumbnailUrl: resolvedThumbnail,
           });
-          setSuccessMessage(`Successfully synchronized changes with Cloudinary and Firestore! Archive updated for "${newName}".`);
+          setSuccessMessage(`Successfully synchronized changes with Cloudinary and the database! Archive updated for "${newName}".`);
           setSelectedEventName(newName);
+          setThumbnailUrl(resolvedThumbnail);
+          setThumbnailFileId('');
+          setExistingMedia(updatedMediaList);
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
@@ -310,9 +397,14 @@ export default function AdminUpload() {
             prev.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
             return [];
           });
-          await fetchEvents();
+          const refreshed = await fetchEvents();
+          const refreshedEvent = refreshed.find((ev) => ev.docId === targetDocId || ev.name === newName);
+          if (refreshedEvent) {
+            setExistingMedia(refreshedEvent.mediaList || updatedMediaList);
+            setThumbnailUrl(refreshedEvent.thumbnailUrl || resolvedThumbnail);
+          }
         } else {
-          setError(`Could not locate existing event "${finalEventName}" in Firestore.`);
+          setError(`Could not locate existing event "${finalEventName}".`);
         }
       }
     } catch (err) {
@@ -514,20 +606,20 @@ export default function AdminUpload() {
                       Existing Media Archive ({existingMedia.length} item{existingMedia.length !== 1 ? 's' : ''})
                     </label>
                     <span style={{ fontSize: '0.78rem', color: 'var(--riso-red)', fontWeight: 600, padding: '4px 10px', background: 'oklch(52% 0.23 27 / 0.08)', borderRadius: 'var(--radius-sm, 6px)', border: '1px solid oklch(52% 0.23 27 / 0.2)' }}>
-                      ⚠ Changes occur only when "SAVE CHANGES" is clicked
+                      Thumbnail saves immediately · other edits need SAVE CHANGES
                     </span>
                   </div>
                   {existingMedia.length > 0 ? (
                     <div className="admin-file-previews" style={{ maxHeight: '380px', overflowY: 'auto', padding: '12px', border: '1px solid var(--border-ink)', borderRadius: 'var(--radius-md)', background: 'var(--bg-paper)' }}>
-                      {existingMedia.map((item, idx) => (
-                        <div key={item.url || idx} className="admin-file-preview-item glass-card" style={{ position: 'relative' }}>
+                      {existingMedia.map((item, idx) => {
+                        const isThumb = thumbnailUrl === item.url && !thumbnailFileId;
+                        const poster = getMediaPosterUrl(item);
+                        return (
+                        <div key={item.url || idx} className="admin-file-preview-item glass-card" style={{ position: 'relative', outline: isThumb ? '2px solid var(--riso-red)' : undefined }}>
                           <div className="admin-file-preview-media">
-                            {item.type === 'video' ? (
-                              <div className="admin-file-preview-video">
-                                <span>🎬</span>
-                              </div>
-                            ) : (
-                              <img src={item.url} alt={`Archive asset ${idx + 1}`} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
+                            <img src={poster} alt={`Archive asset ${idx + 1}`} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
+                            {item.type === 'video' && (
+                              <span style={{ position: 'absolute', bottom: 6, left: 6, fontSize: '0.7rem', background: 'rgba(0,0,0,0.65)', color: '#fff', padding: '2px 6px', borderRadius: 4 }}>Video</span>
                             )}
                           </div>
                           <div className="admin-file-preview-info">
@@ -537,6 +629,25 @@ export default function AdminUpload() {
                             <span className="admin-file-preview-size" style={{ color: 'var(--ink-light)', fontWeight: 600 }}>
                               Cloudinary ({item.type || 'image'})
                             </span>
+                            {!uploading && (
+                              <button
+                                type="button"
+                                onClick={() => { applyThumbnailSelection(item.url); }}
+                                style={{
+                                  marginTop: 6,
+                                  border: isThumb ? 'none' : '1px solid var(--border-accent)',
+                                  background: isThumb ? 'var(--riso-red)' : 'transparent',
+                                  color: isThumb ? '#fff' : 'var(--text-secondary)',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                {isThumb ? 'Thumbnail ✓' : 'Set thumbnail'}
+                              </button>
+                            )}
                           </div>
                           {!uploading && (
                             <button
@@ -550,7 +661,8 @@ export default function AdminUpload() {
                             </button>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', fontStyle: 'italic', padding: '16px', border: '1px dashed var(--border-ink)', borderRadius: 'var(--radius-md)' }}>
@@ -595,11 +707,18 @@ export default function AdminUpload() {
 
           {files.length > 0 && (
             <div className="admin-file-previews">
-              {files.map((fileObj) => (
-                <div key={fileObj.id} className="admin-file-preview-item glass-card">
-                  <div className="admin-file-preview-media">
+              {files.map((fileObj) => {
+                const isThumb = thumbnailFileId === fileObj.id;
+                const isVideo = fileObj.file.type.startsWith('video/');
+                return (
+                <div key={fileObj.id} className="admin-file-preview-item glass-card" style={{ outline: isThumb ? '2px solid var(--riso-red)' : undefined }}>
+                  <div className="admin-file-preview-media" style={{ position: 'relative' }}>
                     {fileObj.preview ? (
-                      <img src={fileObj.preview} alt={fileObj.file.name} />
+                      isVideo ? (
+                        <video src={fileObj.preview} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <img src={fileObj.preview} alt={fileObj.file.name} />
+                      )
                     ) : (
                       <div className="admin-file-preview-video">
                         <span>🎬</span>
@@ -613,6 +732,29 @@ export default function AdminUpload() {
                     <span className="admin-file-preview-size">
                       {formatFileSize(fileObj.file.size)} · {getMediaType(fileObj.file)}
                     </span>
+                    {!uploading && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setThumbnailFileId(fileObj.id);
+                          setThumbnailUrl('');
+                        }}
+                        style={{
+                          marginTop: 6,
+                          border: isThumb ? 'none' : '1px solid var(--border-accent)',
+                          background: isThumb ? 'var(--riso-red)' : 'transparent',
+                          color: isThumb ? '#fff' : 'var(--text-secondary)',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          borderRadius: 4,
+                        }}
+                      >
+                        {isThumb ? 'Thumbnail ✓' : 'Set thumbnail'}
+                      </button>
+                    )}
                   </div>
                   {!uploading && (
                     <button
@@ -625,7 +767,8 @@ export default function AdminUpload() {
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
