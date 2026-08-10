@@ -9,6 +9,7 @@ import User from './models/User.js';
 import authRoutes from './routes/auth.js';
 import eventRoutes from './routes/events.js';
 import secretaryRoutes from './routes/secretaries.js';
+import intakeRoutes from './routes/intake.js';
 import { isCloudinaryAdminConfigured } from './utils/cloudinary.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +33,7 @@ async function connectMongo() {
   }
 
   try {
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
     console.log('Connected to MongoDB');
   } catch (err) {
     console.warn(`MongoDB connection failed (${err.message}). Falling back to in-memory MongoDB.`);
@@ -94,6 +95,7 @@ async function start() {
   app.use('/api/auth', authRoutes);
   app.use('/api/events', eventRoutes);
   app.use('/api/secretaries', secretaryRoutes);
+  app.use('/api/intake', intakeRoutes);
 
   app.use((err, _req, res, _next) => {
     console.error('Unhandled error:', err);

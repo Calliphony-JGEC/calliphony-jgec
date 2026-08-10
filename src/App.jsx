@@ -19,6 +19,7 @@ import AdminUpload from './components/admin/AdminUpload';
 import AdminSecretaries from './components/admin/AdminSecretaries';
 import AdminIntake from './components/admin/AdminIntake';
 import ProtectedRoute from './components/admin/ProtectedRoute';
+import IntakeForm from './components/IntakeForm';
 
 function LandingPage({ events, secretaries }) {
   const [detailModalMode, setDetailModalMode] = useState(null);
@@ -182,6 +183,7 @@ export default function App() {
         <Route path="/" element={<LandingPage events={events} secretaries={secretaries} />} />
         <Route path="/events/:eventId" element={<EventDetailPage events={events} loading={loading} />} />
         <Route path="/admin" element={<AdminLogin />} />
+        <Route path="/intake" element={<IntakeForm />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin/upload" element={<AdminUpload />} />

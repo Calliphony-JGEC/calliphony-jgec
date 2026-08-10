@@ -56,6 +56,14 @@ export default function HomeNavbar() {
           <ThemeToggleButton />
           <button
             type="button"
+            onClick={() => navigate('/intake')}
+            className="admin-badge-btn"
+            title="Intake registration"
+          >
+            <span>Intake ↗</span>
+          </button>
+          <button
+            type="button"
             onClick={() => navigate('/admin')}
             className="admin-badge-btn"
             title="Admin upload portal"

@@ -69,4 +69,8 @@ export const api = {
   updateSecretary: (id, payload) =>
     apiRequest(`/api/secretaries/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteSecretary: (id) => apiRequest(`/api/secretaries/${id}`, { method: 'DELETE' }),
+  submitIntake: (payload) =>
+    apiRequest('/api/intake', { method: 'POST', body: JSON.stringify(payload) }),
+  getIntakeRegistrations: () => apiRequest('/api/intake'),
+  deleteIntakeRegistration: (id) => apiRequest(`/api/intake/${id}`, { method: 'DELETE' }),
 };
