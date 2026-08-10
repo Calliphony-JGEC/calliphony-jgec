@@ -9,10 +9,6 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-function apiBase() {
-  const configured = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-  return configured || '';
-}
 
 export async function apiRequest(path, options = {}) {
   const headers = {
@@ -25,7 +21,7 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${apiBase()}${path}`, {
+  const res = await fetch(path, {
     ...options,
     headers,
   });
