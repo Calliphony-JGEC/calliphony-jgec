@@ -5,6 +5,7 @@ export default function AdminIntake() {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,12 +26,17 @@ export default function AdminIntake() {
   }, []);
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this registration?')) return;
+    if (deleteConfirmId !== id) {
+      setDeleteConfirmId(id);
+      return;
+    }
     try {
       await api.deleteIntakeRegistration(id);
       setRegistrations((prev) => prev.filter((reg) => reg.id !== id));
+      setDeleteConfirmId(null);
     } catch (err) {
       setError(err.message || 'Failed to delete registration.');
+      setDeleteConfirmId(null);
     }
   };
 
@@ -72,21 +78,21 @@ export default function AdminIntake() {
               <tr style={{ borderBottom: '1.5px solid var(--border-ink-strong)', textAlign: 'left' }}>
                 <th style={thStyle}>#</th>
                 <th style={thStyle}>Name</th>
-                <th style={thStyle}>Department</th>
+                <th style={thStyle}>Dept</th>
                 <th style={thStyle}>Roll Number</th>
                 <th style={thStyle}>Role</th>
-                <th style={thStyle}>Registered</th>
-                <th style={thStyle}>Actions</th>
+                <th style={{ ...thStyle, width: '1%', whiteSpace: 'nowrap', textAlign: 'left', paddingRight: '8px' }}>Registered</th>
+                <th style={{ ...thStyle, width: '1%', paddingLeft: '0', paddingRight: '12px' }}></th>
               </tr>
             </thead>
             <tbody>
               {registrations.map((reg, i) => (
                 <tr key={reg.id} style={{ borderBottom: '1px solid var(--border-ink)' }}>
                   <td style={tdStyle}>{i + 1}</td>
-                  <td style={tdStyle}>{reg.name}</td>
+                  <td style={{ ...tdStyle, maxWidth: '140px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{reg.name}</td>
                   <td style={tdStyle}>{reg.department}</td>
                   <td style={{ ...tdStyle, fontFamily: 'var(--font-label)', fontWeight: 600 }}>{reg.rollNumber}</td>
-                  <td style={tdStyle}>
+                  <td style={{ ...tdStyle, maxWidth: '200px' }}>
                     <span
                       style={{
                         fontSize: '0.78rem',
@@ -99,12 +105,14 @@ export default function AdminIntake() {
                         border: `1.5px solid ${reg.role === 'Singer' ? 'var(--riso-red)' : 'var(--border-ink-strong)'}`,
                         padding: '3px 10px',
                         display: 'inline-block',
+                        wordBreak: 'break-all',
+                        whiteSpace: 'normal',
                       }}
                     >
                       {reg.role}
                     </span>
                   </td>
-                  <td style={{ ...tdStyle, fontSize: '0.85rem', color: 'var(--ink-muted)' }}>
+                  <td style={{ ...tdStyle, fontSize: '0.85rem', color: 'var(--ink-muted)', whiteSpace: 'nowrap', paddingRight: '8px', textAlign: 'left' }}>
                     {new Date(reg.createdAt).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -113,13 +121,34 @@ export default function AdminIntake() {
                       minute: '2-digit',
                     })}
                   </td>
-                  <td style={tdStyle}>
+                  <td style={{ ...tdStyle, paddingLeft: '0', paddingRight: '12px' }}>
                     <button
+                      type="button"
                       onClick={() => handleDelete(reg.id)}
-                      className="btn-secondary btn-sm"
-                      style={{ color: 'var(--riso-red)', borderColor: 'var(--border-ink-strong)' }}
+                      title={deleteConfirmId === reg.id ? 'Click to confirm delete' : 'Delete registration'}
+                      style={{
+                        background: deleteConfirmId === reg.id ? '#dc2626' : 'transparent',
+                        color: deleteConfirmId === reg.id ? '#fff' : 'var(--riso-red)',
+                        border: deleteConfirmId === reg.id ? '1.5px solid #dc2626' : '1.5px solid var(--border-ink-strong)',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
                     >
-                      Delete
+                      {deleteConfirmId === reg.id ? (
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
                     </button>
                   </td>
                 </tr>

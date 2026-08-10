@@ -10,6 +10,6 @@ const intakeRegistrationSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: true } }
 );
 
-intakeRegistrationSchema.index({ rollNumber: 1 }, { unique: true });
+
 
 export default mongoose.model('IntakeRegistration', intakeRegistrationSchema);
