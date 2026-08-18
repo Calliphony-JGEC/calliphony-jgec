@@ -67,7 +67,11 @@ export default function AdminLogin() {
             <label htmlFor="admin-email">Email Address</label>
             <input
               id="admin-email"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               className="form-input"
               placeholder="admin@calliphony.club"
               value={email}

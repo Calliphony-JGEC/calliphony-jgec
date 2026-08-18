@@ -1594,7 +1594,7 @@ button {
     scroll-snap-type: x mandatory;
     scroll-behavior: smooth;
     gap: 16px !important;
-    padding: 10px 0 18px 0 !important;
+    padding: 10px 16px 18px !important;
     width: 100% !important;
     scrollbar-width: none;
   }
@@ -1806,14 +1806,22 @@ button {
   }
 
 
+  /* events section: keep side padding on mobile */
+  .events-section {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    padding-top: 60px !important;
+    padding-bottom: 32px !important;
+  }
+
   .footer {
-    padding: 24px 0 16px !important;
+    padding: 32px 16px 20px !important;
     margin-top: 40px !important;
   }
 
   .footer-content {
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
   }
 
   .footer-content h3 {
@@ -1829,17 +1837,23 @@ button {
   .footer-links {
     gap: 14px;
     font-size: 0.78rem;
+    flex-wrap: wrap;
+  }
+
+  .footer-meta {
+    padding-top: 14px;
+    margin-top: 20px;
   }
 }
 
 /* small phones, <= 480px */
 @media (max-width: 480px) {
   .container {
-    padding: 0 12px !important;
+    padding: 0 16px !important;
   }
 
   .HomeNavbar-container {
-    padding: 10px 12px !important;
+    padding: 10px 16px !important;
   }
 
   .hero-title-mega {
@@ -1863,6 +1877,11 @@ button {
   .mobile-horizontal-scroll > .event-card {
     flex: 0 0 85vw !important;
     width: 85vw !important;
+  }
+
+  /* event card title: shrink so it doesn't overflow on small phones */
+  .mobile-horizontal-scroll > .event-card h3 {
+    font-size: 1.5rem !important;
   }
 
   .secretaries-grid > .secretary-card {
