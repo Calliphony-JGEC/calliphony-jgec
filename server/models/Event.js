@@ -18,6 +18,16 @@ const eventSchema = new mongoose.Schema(
     eventDate: { type: String, default: '' },
     eventDescription: { type: String, default: '' },
     mediaList: { type: [mediaSchema], default: [] },
+    /** Optional Google Drive folder/file links for extra archive material */
+    driveLinks: {
+      type: [
+        {
+          url: { type: String, required: true, trim: true },
+          label: { type: String, default: '', trim: true },
+        },
+      ],
+      default: [],
+    },
     /** Delivery URL of the media item chosen as Gallery card thumbnail */
     thumbnailUrl: { type: String, default: '' },
   },

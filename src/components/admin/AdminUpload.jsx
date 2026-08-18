@@ -12,6 +12,7 @@ export default function AdminUpload() {
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [driveLinks, setDriveLinks] = useState([]);
 
   const [editEventName, setEditEventName] = useState('');
   const [editEventDate, setEditEventDate] = useState('');
@@ -72,6 +73,14 @@ export default function AdminUpload() {
           setEditEventName(found.eventName || found.title || found.name || '');
           setEditEventDate(found.eventDate || found.date || '');
           setEditEventDescription(found.eventDescription || found.description || '');
+          setDriveLinks(
+            Array.isArray(found.driveLinks) && found.driveLinks.length
+              ? found.driveLinks.map((link) => ({
+                  url: typeof link === 'string' ? link : link?.url || '',
+                  label: typeof link === 'string' ? '' : link?.label || '',
+                }))
+              : []
+          );
           setThumbnailUrl(found.thumbnailUrl || found.mediaList?.[0]?.url || '');
           setThumbnailFileId('');
         }
@@ -96,6 +105,7 @@ export default function AdminUpload() {
         setEditEventName('');
         setEditEventDate('');
         setEditEventDescription('');
+        setDriveLinks([]);
         setThumbnailUrl('');
         setThumbnailFileId('');
       }
@@ -213,6 +223,59 @@ export default function AdminUpload() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const updateDriveLink = (index, patch) => {
+    setDriveLinks((prev) => prev.map((link, i) => (i === index ? { ...link, ...patch } : link)));
+  };
+
+  const addDriveLink = () => {
+    setDriveLinks((prev) => [...prev, { url: '', label: '' }]);
+  };
+
+  const removeDriveLink = (index) => {
+    setDriveLinks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const driveLinksEditor = (
+    <div className="form-group" style={{ marginTop: mode === 'existing' ? '16px' : 0 }}>
+      <label>Google Drive links (optional)</label>
+      <span style={{ fontSize: '0.78rem', color: 'var(--ink-light)', marginBottom: '8px', display: 'block' }}>
+        Add folder or file links from Drive for extra photos/videos that stay in the media archive.
+      </span>
+      {driveLinks.map((link, index) => (
+        <div key={`drive-${index}`} className="drive-link-row">
+          <input
+            type="url"
+            className="form-input"
+            placeholder="https://drive.google.com/..."
+            value={link.url}
+            onChange={(e) => updateDriveLink(index, { url: e.target.value })}
+            disabled={uploading}
+          />
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Label (optional)"
+            value={link.label}
+            onChange={(e) => updateDriveLink(index, { label: e.target.value })}
+            disabled={uploading}
+          />
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => removeDriveLink(index)}
+            disabled={uploading}
+            style={{ color: 'var(--riso-red)' }}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button type="button" className="btn-secondary btn-sm" onClick={addDriveLink} disabled={uploading}>
+        + Add Drive link
+      </button>
+    </div>
+  );
+
   const resetForm = () => {
     setEventTitle('');
     setEventDate('');
@@ -221,6 +284,7 @@ export default function AdminUpload() {
     setEditEventName('');
     setEditEventDate('');
     setEditEventDescription('');
+    setDriveLinks([]);
     setExistingMedia([]);
     setThumbnailUrl('');
     setThumbnailFileId('');
@@ -366,6 +430,7 @@ export default function AdminUpload() {
           eventDescription: eventDescription.trim(),
           mediaList: stripLocal(uploadedMedia),
           thumbnailUrl: resolvedThumbnail,
+          driveLinks,
         });
         setSuccessMessage(`Successfully published ${totalFiles} file${totalFiles > 1 ? 's' : ''} to Cloudinary folder "calliphony-events/${finalEventName}" and created the event!`);
         resetForm();
@@ -384,6 +449,7 @@ export default function AdminUpload() {
             eventDescription: (editEventDescription || '').trim(),
             mediaList: updatedMediaList,
             thumbnailUrl: resolvedThumbnail,
+            driveLinks,
           });
           setSuccessMessage(`Successfully synchronized changes with Cloudinary and the database! Archive updated for "${newName}".`);
           setSelectedEventName(newName);
@@ -522,6 +588,8 @@ export default function AdminUpload() {
                   disabled={uploading}
                 ></textarea>
               </div>
+
+              {driveLinksEditor}
             </>
           ) : (
             <>
@@ -596,6 +664,8 @@ export default function AdminUpload() {
                       placeholder="Describe the showcase highlights..."
                     ></textarea>
                   </div>
+
+                  {driveLinksEditor}
                 </div>
               )}
 

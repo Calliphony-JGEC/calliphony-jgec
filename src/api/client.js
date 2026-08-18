@@ -65,8 +65,21 @@ export const api = {
   updateSecretary: (id, payload) =>
     apiRequest(`/api/secretaries/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteSecretary: (id) => apiRequest(`/api/secretaries/${id}`, { method: 'DELETE' }),
-  submitIntake: (payload) =>
-    apiRequest('/api/intake', { method: 'POST', body: JSON.stringify(payload) }),
-  getIntakeRegistrations: () => apiRequest('/api/intake'),
-  deleteIntakeRegistration: (id) => apiRequest(`/api/intake/${id}`, { method: 'DELETE' }),
+  getPublicForm: () => apiRequest('/api/forms/public'),
+  getForm: (id) => apiRequest(`/api/forms/${id}`),
+  submitFormResponse: (formId, answers) =>
+    apiRequest(`/api/forms/${formId}/responses`, {
+      method: 'POST',
+      body: JSON.stringify({ answers }),
+    }),
+  getForms: () => apiRequest('/api/forms'),
+  createForm: (payload) =>
+    apiRequest('/api/forms', { method: 'POST', body: JSON.stringify(payload) }),
+  updateForm: (id, payload) =>
+    apiRequest(`/api/forms/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteForm: (id) => apiRequest(`/api/forms/${id}`, { method: 'DELETE' }),
+  getFormResponses: (id) => apiRequest(`/api/forms/${id}/responses`),
+  getSiteSettings: () => apiRequest('/api/settings'),
+  updateSiteSettings: (payload) =>
+    apiRequest('/api/settings', { method: 'PUT', body: JSON.stringify(payload) }),
 };

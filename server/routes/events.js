@@ -54,6 +54,32 @@ function applyCoverSelection(mediaList = [], requestedUrl = '') {
   };
 }
 
+function isGoogleDriveUrl(raw) {
+  try {
+    const parsed = new URL(String(raw || '').trim());
+    const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+    return host === 'drive.google.com' || host === 'docs.google.com';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeDriveLinks(list = []) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  return list
+    .map((item) => {
+      const url = String(typeof item === 'string' ? item : item?.url || '').trim();
+      const label = String(typeof item === 'string' ? '' : item?.label || '').trim();
+      if (!url || !isGoogleDriveUrl(url)) return null;
+      const key = url.split('#')[0];
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return { url, label };
+    })
+    .filter(Boolean);
+}
+
 function serializeEvent(doc) {
   const obj = doc.toObject ? doc.toObject() : doc;
   const rawMedia = Array.isArray(obj.mediaList) ? obj.mediaList : [];
@@ -70,6 +96,12 @@ function serializeEvent(doc) {
     eventDescription: obj.eventDescription || '',
     description: obj.eventDescription || '',
     mediaList,
+    driveLinks: Array.isArray(obj.driveLinks)
+      ? obj.driveLinks.map((link) => ({
+          url: link.url || link,
+          label: link.label || '',
+        })).filter((link) => link.url)
+      : [],
     thumbnailUrl,
     createdAt: obj.createdAt,
   };
@@ -102,6 +134,7 @@ router.post('/', requireAuth, async (req, res) => {
       eventDescription: String(req.body.eventDescription || '').trim(),
       mediaList: covered.mediaList,
       thumbnailUrl: covered.thumbnailUrl,
+      driveLinks: normalizeDriveLinks(req.body.driveLinks),
     });
 
     return res.status(201).json({ event: serializeEvent(event) });
@@ -131,6 +164,9 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
     if (req.body.eventDescription != null) {
       event.eventDescription = String(req.body.eventDescription).trim();
+    }
+    if (req.body.driveLinks != null) {
+      event.driveLinks = normalizeDriveLinks(req.body.driveLinks);
     }
 
     if (Array.isArray(req.body.mediaList)) {

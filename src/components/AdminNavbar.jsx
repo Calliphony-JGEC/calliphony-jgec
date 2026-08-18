@@ -70,8 +70,13 @@ export default function AdminNavbar() {
             </a>
           </li>
           <li>
-            <a href="/admin/intake" onClick={(e) => handleAdminNavClick(e, 'intake')} className="nav-link-item">
-              <span>Intake</span>
+            <a href="/admin/forms" onClick={(e) => handleAdminNavClick(e, 'forms')} className="nav-link-item">
+              <span>Forms</span>
+            </a>
+          </li>
+          <li>
+            <a href="/admin/site" onClick={(e) => handleAdminNavClick(e, 'site')} className="nav-link-item">
+              <span>Footer</span>
             </a>
           </li>
         </ul>

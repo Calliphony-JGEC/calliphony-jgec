@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { uploadToCloudinary, isCloudinaryConfigured } from '../../utils/cloudinary';
 import { api } from '../../api/client';
+import { compareSecretaries } from '../../utils/secretarySort';
 
 const ICON_OPTIONS = [
   { value: '\ud83c\udfb5', label: '\ud83c\udfb5' },
@@ -56,7 +57,7 @@ export default function AdminSecretaries() {
       list.sort((a, b) => {
         const yearCmp = (b.year || '').localeCompare(a.year || '');
         if (yearCmp !== 0) return yearCmp;
-        return (a.name || '').localeCompare(b.name || '');
+        return compareSecretaries(a, b);
       });
       setSecretariesList(list);
     } catch (err) {

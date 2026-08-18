@@ -271,7 +271,7 @@ export default function EventsSection({ events }) {
               lineHeight: 1.6,
             }}
           >
-            Club administrators can log in via the top-right Admin button to directly upload photos and
+            Club administrators can log in via the Admin link in the site footer to upload photos and
             videos and publish live showcases.
           </p>
         </div>

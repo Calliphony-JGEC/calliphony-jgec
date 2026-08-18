@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BrandLogo, ThemeToggleButton } from './ThemeControls';
+import { api } from '../api/client';
 
 export default function HomeNavbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [publicForm, setPublicForm] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -13,6 +15,21 @@ export default function HomeNavbar() {
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getPublicForm()
+      .then((data) => {
+        if (!cancelled) setPublicForm(data.form || null);
+      })
+      .catch(() => {
+        if (!cancelled) setPublicForm(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleNavClick = (e, targetId) => {
@@ -26,6 +43,8 @@ export default function HomeNavbar() {
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
+  const formLabel = (publicForm?.buttonLabel || publicForm?.title || '').trim();
 
   return (
     <header className={`HomeNavbar ${scrolled ? 'HomeNavbar--scrolled' : ''}`}>
@@ -54,22 +73,16 @@ export default function HomeNavbar() {
 
         <div className="nav-actions">
           <ThemeToggleButton />
-          <button
-            type="button"
-            onClick={() => navigate('/intake')}
-            className="admin-badge-btn"
-            title="Intake registration"
-          >
-            <span>Intake ↗</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/admin')}
-            className="admin-badge-btn"
-            title="Admin upload portal"
-          >
-            <span>Admin ↗</span>
-          </button>
+          {formLabel && (
+            <button
+              type="button"
+              onClick={() => navigate(publicForm.id ? `/form/${publicForm.id}` : '/form')}
+              className="admin-badge-btn"
+              title={formLabel}
+            >
+              <span>{formLabel} ↗</span>
+            </button>
+          )}
         </div>
       </nav>
     </header>

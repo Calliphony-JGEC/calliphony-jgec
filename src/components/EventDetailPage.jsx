@@ -121,6 +121,41 @@ export default function EventDetailPage({ events, loading }) {
               </span>
             </div>
 
+            {(event.driveLinks || []).length > 0 && (
+              <div className="event-drive-links" style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontFamily: 'var(--font-label)', fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '12px' }}>
+                  Google Drive
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {event.driveLinks.map((link, idx) => (
+                    <a
+                      key={`${link.url}-${idx}`}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="glass-card"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        padding: '16px 18px',
+                        borderRadius: 'var(--radius-md)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <span style={{ fontFamily: 'var(--font-body)', color: 'var(--ink-black)', wordBreak: 'break-word' }}>
+                        {link.label || `Drive archive ${idx + 1}`}
+                      </span>
+                      <span style={{ color: 'var(--riso-red)', fontFamily: 'var(--font-label)', fontSize: '0.82rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        Open ↗
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* media in a grid */}
             <div
               className="event-media-grid"

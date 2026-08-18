@@ -22,7 +22,20 @@ function serializeSecretary(doc) {
 
 router.get('/', async (_req, res) => {
   try {
-    const secretaries = await Secretary.find().sort({ year: -1, name: 1 });
+    const secretaries = await Secretary.find();
+    secretaries.sort((a, b) => {
+      const yearCmp = String(b.year || '').localeCompare(String(a.year || ''));
+      if (yearCmp !== 0) return yearCmp;
+      const roleRank = (role) => {
+        const r = String(role || '').trim().toLowerCase();
+        if (r === 'secretary') return 0;
+        if (r === 'cashier') return 1;
+        return 2;
+      };
+      const roleCmp = roleRank(a.role) - roleRank(b.role);
+      if (roleCmp !== 0) return roleCmp;
+      return String(b.name || '').localeCompare(String(a.name || ''), undefined, { sensitivity: 'base' });
+    });
     return res.json({ secretaries: secretaries.map(serializeSecretary) });
   } catch (err) {
     console.error('List secretaries error:', err);

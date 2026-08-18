@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import HomeNavbar from './components/HomeNavbar';
 import Hero from './components/Hero';
 import EventsSection from './components/EventsSection';
@@ -12,14 +12,16 @@ import useScrollReveal from './hooks/useScrollReveal';
 import { api } from './api/client';
 import { filterValidEvents } from './utils/mediaValidity';
 import { orderMediaWithThumbnail } from './utils/mediaThumb';
+import { compareSecretaries } from './utils/secretarySort';
 
 import AdminLogin from './components/admin/AdminLogin';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminUpload from './components/admin/AdminUpload';
 import AdminSecretaries from './components/admin/AdminSecretaries';
-import AdminIntake from './components/admin/AdminIntake';
+import AdminForms from './components/admin/AdminForms';
+import AdminSite from './components/admin/AdminSite';
 import ProtectedRoute from './components/admin/ProtectedRoute';
-import IntakeForm from './components/IntakeForm';
+import PublicForm from './components/PublicForm';
 
 function LandingPage({ events, secretaries }) {
   const [detailModalMode, setDetailModalMode] = useState(null);
@@ -103,6 +105,14 @@ function mapEventsForUi(rawEvents) {
       category: 'Live Showcase',
       tag: 'Cloudinary Archive',
       mediaList,
+      driveLinks: Array.isArray(data.driveLinks)
+        ? data.driveLinks
+            .map((link) => ({
+              url: typeof link === 'string' ? link : link?.url || '',
+              label: typeof link === 'string' ? '' : link?.label || '',
+            }))
+            .filter((link) => link.url)
+        : [],
       thumbnailUrl: data.thumbnailUrl || mediaList[0]?.url || '',
       createdAtMillis: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
     };
@@ -164,6 +174,9 @@ export default function App() {
             icon: item.icon || '🎵',
           });
         });
+        Object.keys(grouped).forEach((yr) => {
+          grouped[yr].sort(compareSecretaries);
+        });
         if (!cancelled) setSecretaries(grouped);
       } catch (err) {
         console.error('Error fetching secretaries:', err);
@@ -183,12 +196,16 @@ export default function App() {
         <Route path="/" element={<LandingPage events={events} secretaries={secretaries} />} />
         <Route path="/events/:eventId" element={<EventDetailPage events={events} loading={loading} />} />
         <Route path="/admin" element={<AdminLogin />} />
-        <Route path="/intake" element={<IntakeForm />} />
+        <Route path="/form" element={<PublicForm />} />
+        <Route path="/form/:formId" element={<PublicForm />} />
+        <Route path="/intake" element={<Navigate to="/form" replace />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin/upload" element={<AdminUpload />} />
             <Route path="/admin/secretaries" element={<AdminSecretaries />} />
-            <Route path="/admin/intake" element={<AdminIntake />} />
+            <Route path="/admin/forms" element={<AdminForms />} />
+            <Route path="/admin/site" element={<AdminSite />} />
+            <Route path="/admin/intake" element={<Navigate to="/admin/forms" replace />} />
           </Route>
         </Route>
       </Routes>

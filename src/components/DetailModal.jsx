@@ -4,7 +4,7 @@ import { getEventThumbnail, getMediaPosterUrl } from '../utils/mediaThumb';
 export default function DetailModal({ isOpen, mode, onClose, events, secretaries }) {
   if (!isOpen) return null;
 
-  const allYears = Object.keys(secretaries);
+  const allYears = Object.keys(secretaries || {}).sort((a, b) => b.localeCompare(a));
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -87,8 +87,18 @@ export default function DetailModal({ isOpen, mode, onClose, events, secretaries
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {secretaries[year].map((sec) => (
                       <div key={sec.id} className="glass-card" style={{ padding: '18px', display: 'flex', gap: '16px', alignItems: 'center', borderRadius: 'var(--radius-md)' }}>
-                        <div style={{ fontSize: '2rem', width: '54px', height: '54px', borderRadius: '50%', background: 'var(--bg-paper-dark)', border: '1px solid var(--border-ink-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {sec.icon}
+                        <div style={{ width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', background: 'var(--bg-paper-dark)', border: '1px solid var(--border-ink-strong)', flexShrink: 0 }}>
+                          {sec.image ? (
+                            <img
+                              src={sec.image}
+                              alt={sec.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            />
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }}>
+                              {sec.icon || '🎵'}
+                            </div>
+                          )}
                         </div>
                         <div style={{ flex: '1' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
