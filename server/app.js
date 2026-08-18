@@ -193,11 +193,17 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 
-const corsOrigin = process.env.NODE_ENV === 'production' 
-  ? ['https://calliphony.vercel.app', 'https://calliphony-jgec.vercel.app', 'https://calliphony.com'] // Adjust based on actual prod domains
-  : true;
+function parseCorsOrigins() {
+  const fromEnv = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+  if (fromEnv.length) return fromEnv;
+  if (process.env.NODE_ENV === 'production') return DEFAULT_CORS_ORIGINS;
+  return true;
+}
 
-app.use(cors({ origin: corsOrigin, credentials: true }));
+app.use(cors({ origin: parseCorsOrigins(), credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 
 // serverless initialization
