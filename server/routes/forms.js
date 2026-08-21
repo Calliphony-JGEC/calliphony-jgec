@@ -3,6 +3,7 @@ import { Router } from 'express';
 import Form, { FORM_FIELD_TYPES } from '../models/Form.js';
 import FormResponse from '../models/FormResponse.js';
 import { requireAuth } from '../middleware/auth.js';
+import { buildXlsx, slugFilename } from '../utils/xlsx.js';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ function serializeForm(doc, { includeMeta = false } = {}) {
     buttonLabel: format.buttonLabel,
     submitLabel: format.submitLabel,
     published: Boolean(obj.published),
+    showInNavbar: obj.showInNavbar !== false,
     fields: format.fields,
     format,
     createdAt: obj.createdAt,
@@ -142,13 +144,16 @@ function publicFormPayload(form) {
     description: serialized.description,
     buttonLabel: serialized.buttonLabel,
     submitLabel: serialized.submitLabel,
+    showInNavbar: serialized.showInNavbar,
     fields: serialized.fields,
     format: serialized.format,
   };
 }
 
-async function unpublishOthers(exceptId) {
-  await Form.updateMany({ _id: { $ne: exceptId }, published: true }, { $set: { published: false } });
+function formatAnswerCell(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ');
+  if (value == null) return '';
+  return String(value);
 }
 
 function validateAnswers(fields, answers) {
@@ -203,11 +208,13 @@ function validateAnswers(fields, answers) {
 
 router.get('/public', async (_req, res) => {
   try {
-    const form = await Form.findOne({ published: true }).sort({ updatedAt: -1 });
-    if (!form) {
-      return res.json({ form: null });
-    }
-    return res.json({ form: publicFormPayload(form) });
+    const navForms = await Form.find({ published: true, showInNavbar: { $ne: false } }).sort({ updatedAt: -1 });
+    const forms = navForms.map(publicFormPayload);
+    return res.json({
+      forms,
+      /** First navbar form — used by `/form` when no id is provided. */
+      form: forms[0] || null,
+    });
   } catch (err) {
     console.error('Public form error:', err);
     return res.status(500).json({ error: 'Could not load form.' });
@@ -287,20 +294,18 @@ router.post('/', requireAuth, async (req, res) => {
 
     const fields = normalizeFields(req.body.fields);
     const published = Boolean(req.body.published);
+    const showInNavbar = req.body.showInNavbar == null ? true : Boolean(req.body.showInNavbar);
     const form = await Form.create({
       title,
       description: String(req.body.description || '').trim(),
       buttonLabel: String(req.body.buttonLabel || title).trim(),
       submitLabel: String(req.body.submitLabel || 'Submit').trim() || 'Submit',
       published,
+      showInNavbar,
       fields,
     });
     stampFormat(form);
     await form.save();
-
-    if (published) {
-      await unpublishOthers(form._id);
-    }
 
     return res.status(201).json({ form: serializeForm(form, { includeMeta: true }) });
   } catch (err) {
@@ -333,14 +338,13 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (req.body.published != null) {
       form.published = Boolean(req.body.published);
     }
+    if (req.body.showInNavbar != null) {
+      form.showInNavbar = Boolean(req.body.showInNavbar);
+    }
 
     if (!form.buttonLabel) form.buttonLabel = form.title;
     stampFormat(form);
     await form.save();
-
-    if (form.published) {
-      await unpublishOthers(form._id);
-    }
 
     const responseCount = await FormResponse.countDocuments({ formId: form._id });
     return res.json({ form: serializeForm({ ...form.toObject(), responseCount }, { includeMeta: true }) });
@@ -370,6 +374,62 @@ router.delete('/:id', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Delete form error:', err);
     return res.status(500).json({ error: 'Could not delete form.' });
+  }
+});
+
+router.get('/:id/responses/export', requireAuth, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return invalidId(res);
+    const form = await Form.findById(req.params.id);
+    if (!form) {
+      return res.status(404).json({ error: 'Form not found.' });
+    }
+
+    const format = ensureFormat(form);
+    const responses = await FormResponse.find({ formId: form._id }).sort({ createdAt: -1 });
+
+    const columnMap = new Map();
+    for (const field of format.fields) {
+      columnMap.set(field.id, field.label);
+    }
+    for (const row of responses) {
+      const snapFields = row.format?.fields;
+      if (Array.isArray(snapFields)) {
+        for (const field of snapFields) {
+          if (field?.id && !columnMap.has(field.id)) {
+            columnMap.set(field.id, field.label || field.id);
+          }
+        }
+      }
+      for (const key of Object.keys(row.answers || {})) {
+        if (!columnMap.has(key)) columnMap.set(key, key);
+      }
+    }
+
+    const columns = [...columnMap.entries()];
+    const headers = ['#', ...columns.map(([, label]) => label), 'Submitted at'];
+    const rows = responses.map((row, index) => {
+      const answers = row.answers || {};
+      return [
+        String(index + 1),
+        ...columns.map(([id]) => formatAnswerCell(answers[id])),
+        row.createdAt ? new Date(row.createdAt).toISOString() : '',
+      ];
+    });
+
+    const buffer = buildXlsx({
+      sheetName: (format.title || 'Responses').slice(0, 31),
+      headers,
+      rows,
+    });
+
+    const filename = slugFilename(format.title || form.title);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('Export form responses error:', err);
+    return res.status(500).json({ error: 'Could not export responses.' });
   }
 });
 

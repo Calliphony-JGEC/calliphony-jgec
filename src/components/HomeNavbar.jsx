@@ -5,7 +5,7 @@ import { api } from '../api/client';
 
 export default function HomeNavbar() {
   const [scrolled, setScrolled] = useState(false);
-  const [publicForm, setPublicForm] = useState(null);
+  const [navForms, setNavForms] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -22,10 +22,16 @@ export default function HomeNavbar() {
     api
       .getPublicForm()
       .then((data) => {
-        if (!cancelled) setPublicForm(data.form || null);
+        if (cancelled) return;
+        const list = Array.isArray(data.forms)
+          ? data.forms
+          : data.form
+            ? [data.form]
+            : [];
+        setNavForms(list);
       })
       .catch(() => {
-        if (!cancelled) setPublicForm(null);
+        if (!cancelled) setNavForms([]);
       });
     return () => {
       cancelled = true;
@@ -43,8 +49,6 @@ export default function HomeNavbar() {
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
   };
-
-  const formLabel = (publicForm?.buttonLabel || publicForm?.title || '').trim();
 
   return (
     <header className={`HomeNavbar ${scrolled ? 'HomeNavbar--scrolled' : ''}`}>
@@ -73,16 +77,21 @@ export default function HomeNavbar() {
 
         <div className="nav-actions">
           <ThemeToggleButton />
-          {formLabel && (
-            <button
-              type="button"
-              onClick={() => navigate(publicForm.id ? `/form/${publicForm.id}` : '/form')}
-              className="admin-badge-btn"
-              title={formLabel}
-            >
-              <span>{formLabel} ↗</span>
-            </button>
-          )}
+          {navForms.map((form) => {
+            const label = (form.buttonLabel || form.title || '').trim();
+            if (!label) return null;
+            return (
+              <button
+                key={form.id}
+                type="button"
+                onClick={() => navigate(`/form/${form.id}`)}
+                className="admin-badge-btn"
+                title={label}
+              >
+                <span>{label} ↗</span>
+              </button>
+            );
+          })}
         </div>
       </nav>
     </header>

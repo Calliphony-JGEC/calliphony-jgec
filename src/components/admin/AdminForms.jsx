@@ -31,6 +31,7 @@ function emptyDraft() {
     buttonLabel: '',
     submitLabel: 'Submit',
     published: false,
+    showInNavbar: true,
     fields: [newField()],
   };
 }
@@ -116,6 +117,7 @@ export default function AdminForms() {
       buttonLabel: format.buttonLabel || form.buttonLabel || form.title || '',
       submitLabel: format.submitLabel || form.submitLabel || 'Submit',
       published: Boolean(form.published),
+      showInNavbar: form.showInNavbar !== false,
       fields: sourceFields.length ? sourceFields.map((f) => ({ ...f, options: f.options || [] })) : [newField()],
     });
     setError('');
@@ -180,6 +182,7 @@ export default function AdminForms() {
       buttonLabel: (draft.buttonLabel || draft.title).trim(),
       submitLabel: (draft.submitLabel || 'Submit').trim(),
       published: Boolean(draft.published),
+      showInNavbar: Boolean(draft.showInNavbar),
       fields: fields.map((f) => ({
         ...f,
         label: f.label.trim(),
@@ -210,9 +213,40 @@ export default function AdminForms() {
     try {
       await api.updateForm(form.id, { published });
       await loadForms();
-      setSuccess(published ? `“${form.buttonLabel || form.title}” is now live in the top nav.` : 'Form unpublished.');
+      if (!published) {
+        setSuccess('Form unpublished.');
+      } else if (form.showInNavbar !== false) {
+        setSuccess(`“${form.buttonLabel || form.title}” is live and shown in the top nav.`);
+      } else {
+        setSuccess(`“${form.buttonLabel || form.title}” is live as an unlisted form (URL only).`);
+      }
     } catch (err) {
       setError(err.message || 'Could not update publish state.');
+    }
+  };
+
+  const handleNavbarToggle = async (form, showInNavbar) => {
+    setError('');
+    try {
+      await api.updateForm(form.id, { showInNavbar });
+      await loadForms();
+      setSuccess(
+        showInNavbar
+          ? `“${form.buttonLabel || form.title}” will show in the top nav when published.`
+          : `“${form.buttonLabel || form.title}” is unlisted — share /form/${form.id} directly.`
+      );
+    } catch (err) {
+      setError(err.message || 'Could not update navbar visibility.');
+    }
+  };
+
+  const handleExport = async (form) => {
+    setError('');
+    try {
+      await api.exportFormResponses(form.id);
+      setSuccess(`Exported responses for “${form.title}”.`);
+    } catch (err) {
+      setError(err.message || 'Could not export responses.');
     }
   };
 
@@ -261,7 +295,7 @@ export default function AdminForms() {
           {view === 'edit' ? (editingId ? 'edit form.' : 'new form.') : view === 'responses' ? 'responses.' : 'forms.'}
         </h1>
         <p style={{ color: 'var(--ink-muted)', maxWidth: '640px' }}>
-          Build any public form. Publish one at a time — the top-nav button label updates automatically. Responses are stored permanently.
+          Build public forms. Publish as many as you need — choose which ones get a top-nav button, or keep them unlisted and share the link. Export responses as Excel anytime.
         </p>
       </div>
 
@@ -298,9 +332,16 @@ export default function AdminForms() {
                       {' · '}
                       {form.responseCount || 0} response{(form.responseCount || 0) === 1 ? '' : 's'}
                     </p>
-                    <span className={`form-status-pill ${form.published ? 'is-live' : ''}`}>
-                      {form.published ? 'Live on site' : 'Unpublished'}
-                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                      <span className={`form-status-pill ${form.published ? 'is-live' : ''}`}>
+                        {form.published ? 'Published' : 'Unpublished'}
+                      </span>
+                      {form.published && (
+                        <span className={`form-status-pill ${form.showInNavbar !== false ? 'is-live' : ''}`}>
+                          {form.showInNavbar !== false ? 'In navbar' : 'Unlisted'}
+                        </span>
+                      )}
+                    </div>
                     {form.published && (
                       <p style={{ marginTop: '8px', fontSize: '0.82rem' }}>
                         Public URL:{' '}
@@ -317,6 +358,11 @@ export default function AdminForms() {
                     <button type="button" className="btn-secondary btn-sm" onClick={() => openResponses(form)}>
                       Responses
                     </button>
+                    {(form.responseCount || 0) > 0 && (
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => handleExport(form)}>
+                        Export XLSX
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-secondary btn-sm"
@@ -324,6 +370,15 @@ export default function AdminForms() {
                     >
                       {form.published ? 'Unpublish' : 'Publish'}
                     </button>
+                    {form.published && (
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => handleNavbarToggle(form, form.showInNavbar === false)}
+                      >
+                        {form.showInNavbar !== false ? 'Hide from nav' : 'Show in nav'}
+                      </button>
+                    )}
                     {(form.responseCount || 0) === 0 && (
                       <button
                         type="button"
@@ -392,7 +447,16 @@ export default function AdminForms() {
                 checked={draft.published}
                 onChange={(e) => setDraft((p) => ({ ...p, published: e.target.checked }))}
               />
-              Publish now (replaces any other live form in the top nav)
+              Publish (open for submissions — multiple forms can be live at once)
+            </label>
+            <label className="form-check-row">
+              <input
+                type="checkbox"
+                checked={draft.showInNavbar}
+                onChange={(e) => setDraft((p) => ({ ...p, showInNavbar: e.target.checked }))}
+                disabled={!draft.published}
+              />
+              Show button in site navbar (off = unlisted; share the form URL only)
             </label>
 
             <div className="form-builder-header">
@@ -523,6 +587,11 @@ export default function AdminForms() {
             {responseForm && (
               <button type="button" className="btn-secondary btn-sm" onClick={() => startEdit(responseForm)}>
                 Edit this form
+              </button>
+            )}
+            {responseForm && responses.length > 0 && (
+              <button type="button" className="btn-primary btn-sm" onClick={() => handleExport(responseForm)}>
+                Export XLSX ↓
               </button>
             )}
           </div>

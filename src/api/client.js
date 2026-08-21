@@ -79,6 +79,37 @@ export const api = {
     apiRequest(`/api/forms/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteForm: (id) => apiRequest(`/api/forms/${id}`, { method: 'DELETE' }),
   getFormResponses: (id) => apiRequest(`/api/forms/${id}/responses`),
+  exportFormResponses: async (id) => {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(`/api/forms/${id}/responses/export`, { headers });
+    if (!res.ok) {
+      let message = `Export failed (${res.status})`;
+      try {
+        const data = await res.json();
+        if (data?.error) message = data.error;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/i);
+    const filename = match?.[1] || 'form-responses.xlsx';
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
   getSiteSettings: () => apiRequest('/api/settings'),
   updateSiteSettings: (payload) =>
     apiRequest('/api/settings', { method: 'PUT', body: JSON.stringify(payload) }),
